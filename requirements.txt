@@ -1,0 +1,11 @@
+numpy
+matplotlib
+torch
+gymnasium
+minigrid
+imageio
+imageio[ffmpeg]
+ipython
+pygame
+pyvirtualdisplay
+opencv-python
