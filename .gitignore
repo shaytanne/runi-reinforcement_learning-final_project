@@ -4,3 +4,4 @@ __pycache__/
 .venv/
 venv/
 *.csv
+devtools/ALL_SCRIPTS.py

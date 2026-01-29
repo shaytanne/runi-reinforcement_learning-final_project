@@ -1,5 +1,5 @@
 from src.utils import set_random_seed, Logger, get_device
-from src.agent import BaseAgent
+from src.agent import BaseAgent, RandomAgent
 from src.trainer import train
 from src.template import SimpleGridEnv, pre_process
 
@@ -23,7 +23,7 @@ def main():
     env = SimpleGridEnv(preprocess=pre_process) 
     
     # init agent
-    agent = BaseAgent(
+    agent = RandomAgent(
         config=config, 
         obs_shape=config["obs_shape"], 
         num_actions=env.action_space.n, # todo: is this available?
