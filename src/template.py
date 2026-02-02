@@ -504,135 +504,137 @@ def pre_process(img):
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     return np.expand_dims(gray, axis=-1)
 
-"""# 🔍 Environment Examples & Exploration
-Run the cells below to understand each environment before implementing your solution.
-Use these quick tests to verify preprocessing output shape and rendering.
+if __name__ == "__main__":
 
-## Environment 1: SimpleGridEnv (Empty Room)
+    """# 🔍 Environment Examples & Exploration
+    Run the cells below to understand each environment before implementing your solution.
+    Use these quick tests to verify preprocessing output shape and rendering.
 
-**Task**: Navigate to the green goal square in an empty 8×8 room.
+    ## Environment 1: SimpleGridEnv (Empty Room)
 
-| Property | Value |
-|----------|-------|
-| Grid Size | 8×8 |
-| Agent Start | Random position (1-6, 1-6) |
-| Agent Direction | Random (0-3) |
-| Goal Position | Random: (8,1), (1,8), or (8,8) |
-| Actions | 0: Turn Left, 1: Turn Right, 2: Move Forward |
-| Sparse Reward | +1.0 on reaching goal, 0.0 otherwise |
+    **Task**: Navigate to the green goal square in an empty 8×8 room.
 
-### Quick Test
-"""
+    | Property | Value |
+    |----------|-------|
+    | Grid Size | 8×8 |
+    | Agent Start | Random position (1-6, 1-6) |
+    | Agent Direction | Random (0-3) |
+    | Goal Position | Random: (8,1), (1,8), or (8,8) |
+    | Actions | 0: Turn Left, 1: Turn Right, 2: Move Forward |
+    | Sparse Reward | +1.0 on reaching goal, 0.0 otherwise |
 
-# Initialize environment with preprocessing
-env = SimpleGridEnv(max_steps=100, preprocess=pre_process)
-obs = env.reset()[0]
+    ### Quick Test
+    """
 
-print("=== SimpleGridEnv ===")
-print(f"Action space:       {env.action_space}")
-print(f"Number of actions:  {env.action_space.n}")
-print(f"Observation space:  {env.observation_space}  (ensure it matches preprocessing output)")
-print(f"Observation shape:  {obs.shape}")
-print(f"Agent direction:    {env.agent_dir}")
-print(f"Agent position:     {env.agent_pos}")
-print(f"Goal position:      {env.goal_pos}")
+    # Initialize environment with preprocessing
+    env = SimpleGridEnv(max_steps=100, preprocess=pre_process)
+    obs = env.reset()[0]
 
-# Side-by-side view of raw and preprocessed observations
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-axes[0].imshow(env.render())
-axes[0].set_title("SimpleGridEnv (raw)")
-axes[0].axis("off")
-axes[1].imshow(obs.squeeze(), cmap="gray")
-axes[1].set_title("Preprocessed Observation")
-axes[1].axis("off")
-plt.tight_layout()
-plt.show()
+    print("=== SimpleGridEnv ===")
+    print(f"Action space:       {env.action_space}")
+    print(f"Number of actions:  {env.action_space.n}")
+    print(f"Observation space:  {env.observation_space}  (ensure it matches preprocessing output)")
+    print(f"Observation shape:  {obs.shape}")
+    print(f"Agent direction:    {env.agent_dir}")
+    print(f"Agent position:     {env.agent_pos}")
+    print(f"Goal position:      {env.goal_pos}")
 
-"""## Environment 2: KeyDoorBallEnv (Key-Door-Ball Task)
+    # Side-by-side view of raw and preprocessed observations
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    axes[0].imshow(env.render())
+    axes[0].set_title("SimpleGridEnv (raw)")
+    axes[0].axis("off")
+    axes[1].imshow(obs.squeeze(), cmap="gray")
+    axes[1].set_title("Preprocessed Observation")
+    axes[1].axis("off")
+    plt.tight_layout()
+    plt.show()
 
-**Task**: Complete a multi-step objective: Key → Door → Ball → Goal
+    """## Environment 2: KeyDoorBallEnv (Key-Door-Ball Task)
 
-| Property | Value |
-|----------|-------|
-| Grid Size | 8×8 (two rooms) |
-| Partition Wall | Column 3 |
-| Key Location | Left room (random) |
-| Door Location | In partition wall (random row) |
-| Ball Location | Right room (random) |
-| Goal Position | Fixed at (8, 8) |
-| Actions | 0: Left, 1: Right, 2: Forward, 3: Pickup, 4: Toggle |
+    **Task**: Complete a multi-step objective: Key → Door → Ball → Goal
 
-**Sequence**: Pick up key → Open door → Enter right room → Pick up ball → Reach goal
+    | Property | Value |
+    |----------|-------|
+    | Grid Size | 8×8 (two rooms) |
+    | Partition Wall | Column 3 |
+    | Key Location | Left room (random) |
+    | Door Location | In partition wall (random row) |
+    | Ball Location | Right room (random) |
+    | Goal Position | Fixed at (8, 8) |
+    | Actions | 0: Left, 1: Right, 2: Forward, 3: Pickup, 4: Toggle |
 
-**Helper Methods** (use in reward shaping):
-- `is_carrying_key()` — True if agent has the key
-- `is_carrying_ball()` — True if agent has the ball
-- `is_door_open()` — True if door is open
+    **Sequence**: Pick up key → Open door → Enter right room → Pick up ball → Reach goal
 
-### Quick Test
-"""
+    **Helper Methods** (use in reward shaping):
+    - `is_carrying_key()` — True if agent has the key
+    - `is_carrying_ball()` — True if agent has the ball
+    - `is_door_open()` — True if door is open
 
-# Initialize environment
-env = KeyDoorBallEnv(max_steps=5000, preprocess=pre_process)
-obs = env.reset()[0]
+    ### Quick Test
+    """
 
-print("=== KeyDoorBallEnv ===")
-print(f"Action space:       {env.action_space}")
-print(f"Number of actions:  {env.action_space.n}")
-print(f"Observation space:  {env.observation_space}  (ensure it matches preprocessing output)")
-print(f"Observation shape:  {obs.shape}")
-print(f"Agent direction:    {env.agent_dir}")
-print(f"Agent position:     {env.agent_pos}")
-print(f"Goal position:      {env.goal_pos}")
-print(f"Carrying key:       {env.is_carrying_key()}")
-print(f"Door open:          {env.is_door_open()}")
-print(f"Carrying ball:      {env.is_carrying_ball()}")
+    # Initialize environment
+    env = KeyDoorBallEnv(max_steps=5000, preprocess=pre_process)
+    obs = env.reset()[0]
 
-# Side-by-side view of raw and preprocessed observations
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-axes[0].imshow(env.render())
-axes[0].set_title("KeyDoorBallEnv (raw)")
-axes[0].axis("off")
-axes[1].imshow(obs.squeeze(), cmap="gray")
-axes[1].set_title("Preprocessed Observation")
-axes[1].axis("off")
-plt.tight_layout()
-plt.show()
+    print("=== KeyDoorBallEnv ===")
+    print(f"Action space:       {env.action_space}")
+    print(f"Number of actions:  {env.action_space.n}")
+    print(f"Observation space:  {env.observation_space}  (ensure it matches preprocessing output)")
+    print(f"Observation shape:  {obs.shape}")
+    print(f"Agent direction:    {env.agent_dir}")
+    print(f"Agent position:     {env.agent_pos}")
+    print(f"Goal position:      {env.goal_pos}")
+    print(f"Carrying key:       {env.is_carrying_key()}")
+    print(f"Door open:          {env.is_door_open()}")
+    print(f"Carrying ball:      {env.is_carrying_ball()}")
 
-# Random action rollout + video
-max_steps = 100
-env = KeyDoorBallEnv(max_steps=max_steps, preprocess=pre_process)
-num_actions = env.action_space.n
-obs = env.reset()[0]
-video_filename = "/content/KeyDoorBallEnv_random.mp4"
+    # Side-by-side view of raw and preprocessed observations
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    axes[0].imshow(env.render())
+    axes[0].set_title("KeyDoorBallEnv (raw)")
+    axes[0].axis("off")
+    axes[1].imshow(obs.squeeze(), cmap="gray")
+    axes[1].set_title("Preprocessed Observation")
+    axes[1].axis("off")
+    plt.tight_layout()
+    plt.show()
 
-with imageio.get_writer(video_filename, fps=10) as video:
-    obs, _ = env.reset()
-    done = False
-    total_reward = 0
-    for step in range(max_steps):
-        action = random.randint(0, num_actions - 1)
-        obs, reward, terminated, truncated, _ = env.step(action)
-        done = terminated or truncated
-        total_reward += reward
-        video.append_data(env.render())
-        if done:
-            break
+    # Random action rollout + video
+    max_steps = 100
+    env = KeyDoorBallEnv(max_steps=max_steps, preprocess=pre_process)
+    num_actions = env.action_space.n
+    obs = env.reset()[0]
+    video_filename = "/content/KeyDoorBallEnv_random.mp4"
 
-# Print episode summary
-print("=== Episode Summary ===")
-print(f"Steps:         {step + 1}")
-print(f"Total reward:  {total_reward:.3f}")
-print(f"Terminated:    {terminated}")
-print(f"Truncated:     {truncated}")
-print()
-print("=== Environment Status (End of Episode) ===")
-print(f"Agent position:  {env.agent_pos}")
-print(f"Carrying key:    {env.is_carrying_key()}")
-print(f"Door open:       {env.is_door_open()}")
-print(f"Carrying ball:   {env.is_carrying_ball()}")
+    with imageio.get_writer(video_filename, fps=10) as video:
+        obs, _ = env.reset()
+        done = False
+        total_reward = 0
+        for step in range(max_steps):
+            action = random.randint(0, num_actions - 1)
+            obs, reward, terminated, truncated, _ = env.step(action)
+            done = terminated or truncated
+            total_reward += reward
+            video.append_data(env.render())
+            if done:
+                break
 
-embed_mp4(video_filename)
+    # Print episode summary
+    print("=== Episode Summary ===")
+    print(f"Steps:         {step + 1}")
+    print(f"Total reward:  {total_reward:.3f}")
+    print(f"Terminated:    {terminated}")
+    print(f"Truncated:     {truncated}")
+    print()
+    print("=== Environment Status (End of Episode) ===")
+    print(f"Agent position:  {env.agent_pos}")
+    print(f"Carrying key:    {env.is_carrying_key()}")
+    print(f"Door open:       {env.is_door_open()}")
+    print(f"Carrying ball:   {env.is_carrying_ball()}")
 
-"""# Your Code Below"""
+    embed_mp4(video_filename)
+
+    """# Your Code Below"""
 

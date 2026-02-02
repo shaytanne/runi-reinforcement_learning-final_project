@@ -1,10 +1,14 @@
-import random
-import numpy as np
-import torch
 import os
 import csv
 import time
-from typing import Dict 
+import random
+from typing import Dict, Optional
+
+import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
+import torch
+
 
 def set_random_seed(seed: int) -> None:
     """
@@ -24,6 +28,145 @@ def get_device() -> torch.device:
     return torch.device(processor_type)
 
 
+# ##########
+# PLOTTING UTILS
+# ##########
+def plot_training_curves(log_dir: str, window: int = 50) -> None:
+    """
+    Generates single-run convergence graphs with smoothing
+    - reqards
+    - steps
+    - success
+    """
+
+    csv_path = os.path.join(log_dir, "log.csv")
+    if not os.path.exists(csv_path):
+        return
+
+    df = pd.read_csv(csv_path)
+    
+    # create 3 subplots
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 5))
+
+    # rewards
+    ax1.plot(df['episode'], df['reward'], alpha=0.3, color='tab:blue')
+    if len(df) > window:
+        ax1.plot(df['episode'], df['reward'].rolling(window).mean(), color='tab:blue', linewidth=2)
+    ax1.set_title('Reward')
+    ax1.set_xlabel('Episode')
+
+    # steps
+    ax2.plot(df['episode'], df['steps'], alpha=0.3, color='tab:orange')
+    if len(df) > window:
+        ax2.plot(df['episode'], df['steps'].rolling(window).mean(), color='tab:orange', linewidth=2)
+    ax2.set_title('Steps to Goal')
+    ax2.set_xlabel('Episode')
+
+    # success rate (rolling avg of binary success column)
+    if 'success' in df.columns:
+        ax3.plot(df['episode'], df['success'].rolling(window).mean(), color='tab:green', linewidth=2)
+        ax3.set_title(f'Success Rate (Rolling {window})')
+        ax3.set_ylim(0, 1.1)
+        ax3.set_xlabel('Episode')
+        ax3.set_ylabel('Success %')
+    
+    plt.tight_layout()
+    save_path = os.path.join(log_dir, "training_curves.png")
+    plt.savefig(save_path)
+    plt.close()
+
+
+def plot_comparison(run_directories: Dict, window: int = 50, save_dir: str = "results") -> None:
+    """
+    Plots multiple runs to compare algorithms    
+    :param run_directories: dict like {'DQN': 'results/DQN_.../', 'DoubleDQN': 'results/Double_.../'}
+    """
+
+    plt.figure(figsize=(12, 6))
+    
+    for label, log_dir in run_directories.items():
+        csv_path = os.path.join(log_dir, "log.csv")
+        if not os.path.exists(csv_path):
+            continue
+            
+        df = pd.read_csv(csv_path)
+        if len(df) > window:
+            # plot only smoothed curve for clarity
+            rolling_avg = df['reward'].rolling(window=window).mean()
+            plt.plot(df['episode'], rolling_avg, linewidth=2, label=label)
+        else:
+            plt.plot(df['episode'], df['reward'], linewidth=2, label=label)
+
+    plt.xlabel('Episode')
+    plt.ylabel('Average Reward')
+    plt.title(f'Algorithm Comparison (Smoothed over {window} eps)')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    save_path = os.path.join(save_dir, "comparison_plot.png")
+    plt.savefig(save_path)
+    plt.close()
+    print(f"Comparison plot saved to: {save_path}")
+
+
+def analyze_inference(log_dir: str) -> None:
+    """
+    Reads inference_log.csv, calculates stats, generates report & plots
+    """
+    csv_path = os.path.join(log_dir, "inference_log.csv")
+    if not os.path.exists(csv_path):
+        print(f"No inference log found at {csv_path}")
+        return
+
+    try:
+        df = pd.read_csv(csv_path)
+        
+        # calculate stats:
+        avg_reward = df['reward'].mean()
+        avg_steps = df['steps'].mean()
+        success_rate = df['success'].mean() * 100
+        
+        print(f"Inference Analysis:")
+        print(f"   Success Rate: {success_rate:.1f}%")
+        print(f"   Avg Steps:    {avg_steps:.1f}")
+
+        # save text report
+        report_path = os.path.join(log_dir, "inference_report.txt")
+        with open(report_path, "w") as f:
+            f.write(f"Inference Analysis ({len(df)} episodes):\n")
+            f.write(f"Success Rate: {success_rate:.2f}%\n")
+            f.write(f"Avg Reward:   {avg_reward:.4f}\n")
+            f.write(f"Avg Steps:    {avg_steps:.2f}\n")
+            f.write(f"Std Dev Steps:{df['steps'].std():.2f}\n")
+
+        # histogram plot
+        plt.figure(figsize=(8, 6))
+        
+        # plot only successful episodes for step distribution 
+        success_steps = df[df['success'] == 1]['steps']
+        if len(success_steps) > 0:
+            plt.hist(success_steps, bins=15, color='green', alpha=0.7, label='Successes')
+            plt.axvline(avg_steps, color='red', linestyle='dashed', linewidth=2, label=f'Avg Steps: {avg_steps:.1f}')
+        else:
+            plt.text(0.5, 0.5, "No Successes to Plot", ha='center')
+
+        plt.title(f"Inference: Steps Distribution (Success: {success_rate:.0f}%)")
+        plt.xlabel("Steps to Goal")
+        plt.ylabel("Frequency")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        save_path = os.path.join(log_dir, "inference_histogram.png")
+        plt.savefig(save_path)
+        plt.close()
+        print(f"Inference plots saved to: {save_path}")
+
+    except Exception as e:
+        print(f"Error analyzing inference: {e}")
+
+# ##########
+# LOGGING
+# ##########
 class Logger:
     """Logging service for the system"""
 
@@ -41,9 +184,14 @@ class Logger:
         self.csv_path = os.path.join(self.log_directory, "log.csv")
         self.csv_file = open(self.csv_path, "w", newline="")
         self.writer = csv.writer(self.csv_file)
-        self.writer.writerow(["episode", "reward", "steps", "epsilon"])
+        self.writer.writerow(["episode", "reward", "steps", "epsilon", "success"])
 
-    def log(self, episode: int, reward: float, steps: int, epsilon: float) -> None:
+    def log(self, episode: int, reward: float, steps: int, epsilon: float, success: Optional[bool] = None) -> None:
         """Adds single row to log file"""
-        self.writer.writerow([episode, reward, steps, epsilon])
+
+        row = [episode, reward, steps, epsilon]
+        if success is not None: # handle no success info
+            row.append(int(success))
+
+        self.writer.writerow(row)
         self.csv_file.flush()

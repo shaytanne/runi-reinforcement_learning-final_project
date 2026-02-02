@@ -1,6 +1,6 @@
-from src.utils import set_random_seed, Logger, get_device
+from src.utils import analyze_inference, plot_training_curves, set_random_seed, Logger, get_device
 from src.agent import BaseAgent, RandomAgent
-from src.trainer import train
+from src.trainer import train, evaluate
 from src.template import SimpleGridEnv, pre_process
 
 def main():
@@ -32,6 +32,17 @@ def main():
 
     # run training
     train(env=env, agent=agent, logger=logger, config=config)
+    plot_training_curves(log_dir=logger.log_directory)
+
+    # run inference
+    evaluate(
+        env=env, 
+        agent=agent, 
+        config=config, 
+        save_dir=logger.log_directory, 
+        num_eval_episodes=100
+    )
+    analyze_inference(logger.log_directory)
 
 if __name__ == "__main__":
     main()
