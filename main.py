@@ -9,8 +9,9 @@ def main():
         "algo": "TestRun",
         "env_name": "SimpleGrid",
         "seed": 42,
-        "episodes": 3,
-        "obs_shape": (3, 8, 8), 
+        "training_episodes": 5,
+        "inference_episodes": 10,
+        "obs_shape": (320, 320, 1), 
     }
 
     # setup infra:
@@ -37,10 +38,10 @@ def main():
     # run inference
     evaluate(
         env=env, 
-        agent=agent, 
+        agent=agent,
+        logger=logger,
         config=config, 
         save_dir=logger.log_directory, 
-        num_eval_episodes=100
     )
     analyze_inference(logger.log_directory)
 

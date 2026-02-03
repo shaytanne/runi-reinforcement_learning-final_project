@@ -1,13 +1,7 @@
 import os
 import sys
+
 from src.constants import ROOT_DIR, SRC_DIR
-
-
-# Add project root to sys.path to allow imports from src
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-if project_root not in sys.path:
-    sys.path.append(project_root)
 
 
 def combine_scripts(source_files, output_file):
@@ -97,12 +91,14 @@ if __name__ == "__main__":
     # Define the order of files to combine. 
     # Dependencies should come before usage.
     files = [
+        os.path.join(SRC_DIR, "constants.py"),
         os.path.join(SRC_DIR, "utils.py"),
         os.path.join(SRC_DIR, "buffer.py"),
         os.path.join(SRC_DIR, "model.py"),
         os.path.join(SRC_DIR, "agent.py"),
         os.path.join(SRC_DIR, "trainer.py"),
         os.path.join(SRC_DIR, "template.py"),
+        os.path.join(ROOT_DIR, "main.py"),
     ]
     
     output_filename = os.path.join(ROOT_DIR, "devtools", "ALL_SCRIPTS.py")

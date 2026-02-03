@@ -6,8 +6,11 @@ from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
+import imageio
 from matplotlib import pyplot as plt
 import torch
+
+from src.agent import BaseAgent
 
 
 def set_random_seed(seed: int) -> None:
@@ -39,7 +42,7 @@ def plot_training_curves(log_dir: str, window: int = 50) -> None:
     - success
     """
 
-    csv_path = os.path.join(log_dir, "log.csv")
+    csv_path = os.path.join(log_dir, "training_log.csv")
     if not os.path.exists(csv_path):
         return
 
@@ -64,11 +67,17 @@ def plot_training_curves(log_dir: str, window: int = 50) -> None:
 
     # success rate (rolling avg of binary success column)
     if 'success' in df.columns:
-        ax3.plot(df['episode'], df['success'].rolling(window).mean(), color='tab:green', linewidth=2)
+        success_data = pd.to_numeric(df['success'], errors='coerce').fillna(0) # cleans col naming/type issues
+        if len(df) > window:
+            success_data = success_data.rolling(window).mean()
+
+        ax3.plot(df['episode'], success_data, color='tab:green', linewidth=2)
         ax3.set_title(f'Success Rate (Rolling {window})')
         ax3.set_ylim(0, 1.1)
         ax3.set_xlabel('Episode')
         ax3.set_ylabel('Success %')
+    else:
+        print(f"success column missing, available columns: {df.columns}")
     
     plt.tight_layout()
     save_path = os.path.join(log_dir, "training_curves.png")
@@ -85,7 +94,7 @@ def plot_comparison(run_directories: Dict, window: int = 50, save_dir: str = "re
     plt.figure(figsize=(12, 6))
     
     for label, log_dir in run_directories.items():
-        csv_path = os.path.join(log_dir, "log.csv")
+        csv_path = os.path.join(log_dir, "training_log.csv")
         if not os.path.exists(csv_path):
             continue
             
@@ -142,7 +151,7 @@ def analyze_inference(log_dir: str) -> None:
         # histogram plot
         plt.figure(figsize=(8, 6))
         
-        # plot only successful episodes for step distribution 
+        # plot only successful episodes for step distribution # todo consider all episodes?
         success_steps = df[df['success'] == 1]['steps']
         if len(success_steps) > 0:
             plt.hist(success_steps, bins=15, color='green', alpha=0.7, label='Successes')
@@ -163,6 +172,7 @@ def analyze_inference(log_dir: str) -> None:
 
     except Exception as e:
         print(f"Error analyzing inference: {e}")
+         
 
 # ##########
 # LOGGING
@@ -181,7 +191,7 @@ class Logger:
             f.write(str(config))
 
         #  init log file
-        self.csv_path = os.path.join(self.log_directory, "log.csv")
+        self.csv_path = os.path.join(self.log_directory, "training_log.csv")
         self.csv_file = open(self.csv_path, "w", newline="")
         self.writer = csv.writer(self.csv_file)
         self.writer.writerow(["episode", "reward", "steps", "epsilon", "success"])
@@ -195,3 +205,39 @@ class Logger:
 
         self.writer.writerow(row)
         self.csv_file.flush()
+
+
+class VideoRecorder:
+    """Handles episode video recording, saves to MP4"""
+    def __init__(self, save_dir: str, env, agent: BaseAgent, fps: int = 10):
+        self.save_dir = save_dir
+        self.fps = fps
+        self.frames = []
+        self.recording = False
+        self.filename = None
+
+        self.env = env
+        self.agent = agent
+
+
+    def start(self, stage: str) -> None:
+        self.recording = True
+        self.frames = []
+        env_name = self.env.__class__.__name__
+        self.filename = f"{self.agent.name}_{env_name}_{stage}.mp4"
+
+    def capture(self) -> None:
+        if self.recording:
+            frame = self.env.render() # render mode must be 'rgb_array'
+            self.frames.append(frame)
+
+    def stop(self) -> None:
+        if self.recording and self.frames:
+            path = os.path.join(self.save_dir, self.filename)
+            try:
+                imageio.mimsave(path, self.frames, fps=self.fps)
+                print(f"Video saved: {path}")
+            except Exception as e:
+                print(f"Video save failed: {e}")
+        self.recording = False
+        self.frames = []

@@ -23,6 +23,10 @@ class BaseAgent(ABC):
     def save(self, path: str):
         pass
 
+    @property
+    def name(self) -> str:
+        return self.config.get("algo", "BaseAgent")
+
 
 class RandomAgent(BaseAgent):
     """Dummy agent for testing infrastructure"""
