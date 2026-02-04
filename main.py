@@ -1,3 +1,4 @@
+import time
 from src.utils import analyze_inference, plot_training_curves, set_random_seed, Logger, get_device
 from src.agent import BaseAgent, RandomAgent
 from src.trainer import train, evaluate
@@ -8,10 +9,11 @@ def main():
     config = {
         "algo": "TestRun",
         "env_name": "SimpleGrid",
-        "seed": 42,
+        # "seed": 42,
+        "seed": int(time.time()),
         "training_episodes": 5,
         "inference_episodes": 10,
-        "obs_shape": (320, 320, 1), 
+        "obs_shape": (84, 84, 1), 
     }
 
     # setup infra:

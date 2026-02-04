@@ -169,7 +169,7 @@ class SimpleGridEnv(BaseMiniGridEnv):
         self.observation_space = spaces.Box(
             low=0,
             high=255,
-            shape=(320, 320, 1),
+            shape=(84, 84, 1),
             dtype=np.uint8
         )
         # ╔═════════════════════════════════════════════════════════════════════╗
@@ -310,7 +310,7 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
         self.observation_space = spaces.Box(
             low=0,
             high=255,
-            shape=(320, 320, 1),
+            shape=(84, 84, 1),
             dtype=np.uint8
         )
         # ╔═════════════════════════════════════════════════════════════════════╗
@@ -499,10 +499,13 @@ def pre_process(img):
     Preprocess raw RGB observation from the environment.
 
     Input:  RGB image (320, 320, 3)
-    Output: Grayscale image (320, 320, 1)
+    Output:
+        - grayscale (3 channels -> 1 channel)
+        - resized (320, 320) -> (84, 84)
     """
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    return np.expand_dims(gray, axis=-1)
+    resized = cv2.resize(gray, (84, 84), interpolation=cv2.INTER_AREA)
+    return np.expand_dims(resized, axis=-1)
 
 if __name__ == "__main__":
 
