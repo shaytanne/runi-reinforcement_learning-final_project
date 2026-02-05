@@ -6,6 +6,7 @@ BASE_CONFIG = {
     "training_episodes": 5,
     "inference_episodes": 10,
     "obs_shape": (84, 84, 1),
+    "training_freq": 1,          # train every N steps   
 }
 
 # DQN on SimpleGrid
@@ -18,7 +19,8 @@ DEFAULT_DQN_CONFIG.update({
     "learning_rate": 2.5e-4,     
     "epsilon_start": 1.0,        # initial epsilon
     "epsilon_min": 0.05,         # minimum epsilon
-    "epsilon_decay": 0.995,    
+    "epsilon_decay": 0.995,
+    "training_freq": 4,          # train (call _learn) every N steps   
     "target_update_freq": 1000,  # steps between syncing target network
     "grad_clip": 1.0,            # gradient clipping value
 })

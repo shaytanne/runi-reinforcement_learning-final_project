@@ -9,7 +9,9 @@ def main():
     # experiment configuration:
     config = DEFAULT_DQN_CONFIG.copy()
     config.update({
+        # ** to customize experiment - add/override config entries here **
         "env_name": "SimpleGrid",
+        "max_steps": 200,
         "training_episodes": 600,
         "inference_episodes": 10,
         "buffer_capacity": 100000,   # replay buffer for DQN 
@@ -18,17 +20,18 @@ def main():
     # setup infra:
     set_random_seed(seed=config["seed"])
     device = get_device()
-    logger = Logger(config=config)
     print(f"Running on: {device}")
+    logger = Logger(config=config)
+    
 
     # init environment (from template)
-    env = SimpleGridEnv(preprocess=pre_process) 
+    env = SimpleGridEnv(max_steps=config["max_steps"], preprocess=pre_process) 
     
     # init agent
     agent = DQNAgent(
         config=config, 
         obs_shape=config["obs_shape"], 
-        num_actions=env.action_space.n, # todo: is this available?
+        num_actions=env.action_space.n,
         device=device
     )
 

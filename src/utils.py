@@ -1,3 +1,4 @@
+import json
 import os
 import csv
 import time
@@ -151,13 +152,20 @@ def analyze_inference(log_dir: str) -> None:
         # histogram plot
         plt.figure(figsize=(8, 6))
         
-        # plot only successful episodes for step distribution # todo consider all episodes?
+        # todo consider success only?
         success_steps = df[df['success'] == 1]['steps']
-        if len(success_steps) > 0:
-            plt.hist(success_steps, bins=15, color='green', alpha=0.7, label='Successes')
-            plt.axvline(avg_steps, color='red', linestyle='dashed', linewidth=2, label=f'Avg Steps: {avg_steps:.1f}')
-        else:
-            plt.text(0.5, 0.5, "No Successes to Plot", ha='center')
+        fail_steps = df[df['success'] == 0]['steps']
+        plt.hist(
+            [success_steps, fail_steps], 
+            bins=20,
+            stacked=True,
+            color=['green', 'red'],
+            alpha=0.7, 
+            label=['Success', 'Failure']
+        )
+
+        # plot avg steps line
+        plt.axvline(avg_steps, color='red', linestyle='dashed', linewidth=2, label=f'Avg Steps: {avg_steps:.1f}')
 
         plt.title(f"Inference: Steps Distribution (Success: {success_rate:.0f}%)")
         plt.xlabel("Steps to Goal")
@@ -186,9 +194,9 @@ class Logger:
         os.makedirs(self.log_directory, exist_ok=True)
         
         # save config
-        config_path = os.path.join(self.log_directory, "config.txt")
+        config_path = os.path.join(self.log_directory, "config.json")
         with open(config_path, "w") as f:
-            f.write(str(config))
+            json.dump(config, f, indent=4)
 
         #  init log file
         self.csv_path = os.path.join(self.log_directory, "training_log.csv")

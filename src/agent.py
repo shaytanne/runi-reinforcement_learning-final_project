@@ -72,6 +72,7 @@ class DQNAgent(BaseAgent):
         self.epsilon_decay: float = self.config.get("epsilon_decay")
         self.learning_rate: float = self.config.get("learning_rate")
         self.batch_size: int = self.config.get("batch_size")
+        self.training_freq: int = self.config.get("training_freq")
         self.target_update_freq: int = self.config.get("target_update_freq")
 
         # init networks:
@@ -128,15 +129,16 @@ class DQNAgent(BaseAgent):
         2. train (if buffer has enough data)
         3. decay epsilon
         """
+        self.steps_done += 1
+        
         # store step
         self.memory.add(obs=obs, action=action, reward=reward, next_obs=next_obs, done=done)
         
         # train
-        if len(self.memory) >= self.batch_size:
+        if (len(self.memory) >= self.batch_size) and (self.steps_done % self.training_freq == 0):
             self._learn()
             
         # update target net logic:
-        self.steps_done += 1
         if self.steps_done % self.target_update_freq == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
             

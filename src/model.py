@@ -13,7 +13,7 @@ class MiniGridCNN(nn.Module):
         super().__init__()
 
         # parse input dimensions
-        num_channels, height, width = input_shape
+        height, width, num_channels = input_shape
         
         # CONV layers:
         self.visual_features = nn.Sequential(
