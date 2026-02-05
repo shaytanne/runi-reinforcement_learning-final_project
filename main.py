@@ -1,20 +1,19 @@
 import time
 from src.utils import analyze_inference, plot_training_curves, set_random_seed, Logger, get_device
-from src.agent import BaseAgent, RandomAgent
+from src.agent import BaseAgent, RandomAgent, DQNAgent
+from src.configs import DEFAULT_DQN_CONFIG
 from src.trainer import train, evaluate
 from src.template import SimpleGridEnv, pre_process
 
 def main():
-    # configuration
-    config = {
-        "algo": "TestRun",
+    # experiment configuration:
+    config = DEFAULT_DQN_CONFIG.copy()
+    config.update({
         "env_name": "SimpleGrid",
-        # "seed": 42,
-        "seed": int(time.time()),
-        "training_episodes": 5,
+        "training_episodes": 600,
         "inference_episodes": 10,
-        "obs_shape": (84, 84, 1), 
-    }
+        "buffer_capacity": 100000,   # replay buffer for DQN 
+    })
 
     # setup infra:
     set_random_seed(seed=config["seed"])
@@ -26,7 +25,7 @@ def main():
     env = SimpleGridEnv(preprocess=pre_process) 
     
     # init agent
-    agent = RandomAgent(
+    agent = DQNAgent(
         config=config, 
         obs_shape=config["obs_shape"], 
         num_actions=env.action_space.n, # todo: is this available?

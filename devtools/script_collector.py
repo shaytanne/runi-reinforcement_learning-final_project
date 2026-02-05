@@ -4,7 +4,7 @@ import sys
 from src.constants import ROOT_DIR, SRC_DIR
 
 
-def combine_scripts(source_files, output_file):
+def collect_scripts(source_files, output_file):
     """
     Combines multiple Python scripts into one file.
     - Moves all imports to the top.
@@ -92,6 +92,7 @@ if __name__ == "__main__":
     # Dependencies should come before usage.
     files = [
         os.path.join(SRC_DIR, "constants.py"),
+        os.path.join(SRC_DIR, "configs.py"),
         os.path.join(SRC_DIR, "utils.py"),
         os.path.join(SRC_DIR, "buffer.py"),
         os.path.join(SRC_DIR, "model.py"),
@@ -103,4 +104,4 @@ if __name__ == "__main__":
     
     output_filename = os.path.join(ROOT_DIR, "devtools", "ALL_SCRIPTS.py")
     
-    combine_scripts(files, output_filename)
+    collect_scripts(files, output_filename)

@@ -38,7 +38,7 @@ class ReplayBuffer:
         """Sample a random batch of transitions from the buffer"""
         idxs = np.random.randint(0, self.occupancy, size=batch_size)
 
-        # sample + normalize
+        # sample + normalize (divide by 255) + handle shape convesions
         obs_sample = torch.as_tensor(self.obs[idxs], device=self.device).float().div(255.0).permute(0, 3, 1, 2)
         next_obs_sample = torch.as_tensor(self.next_obs[idxs], device=self.device).float().div(255.0).permute(0, 3, 1, 2)
         actions_sample = torch.as_tensor(self.action[idxs], device=self.device).long()

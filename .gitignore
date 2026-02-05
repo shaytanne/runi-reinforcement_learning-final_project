@@ -1,7 +1,12 @@
 results/
 __pycache__/
-*.mp4
+*.pyc
+
+*.egg-info/
+build/
+dist/
+
 .venv/
 venv/
-*.csv
+
 devtools/ALL_SCRIPTS.py
