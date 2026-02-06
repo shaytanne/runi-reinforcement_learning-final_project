@@ -6,3 +6,4 @@ Design Decisions:
 * hyperparameters
 * model architecture
 * reward shaping
+* step limit & training episodes

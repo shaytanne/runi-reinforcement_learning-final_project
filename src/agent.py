@@ -15,6 +15,13 @@ from src.configs import DEFAULT_DQN_CONFIG
 
 class BaseAgent(ABC):
     """Base class for agents"""
+    gamma: float
+    epsilon: float
+    learning_rate: float
+    device: torch.device
+    config: Dict
+
+
 
     def __init__(self, config: Dict, obs_shape: np.ndarray, num_actions: int, device: torch.device):
         self.device = device

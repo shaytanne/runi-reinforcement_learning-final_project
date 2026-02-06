@@ -1,53 +1,102 @@
+from datetime import timedelta
 import time
-from src.utils import analyze_inference, plot_training_curves, set_random_seed, Logger, get_device
+from typing import Dict
+
+from src.utils import analyze_inference, plot_training_curves, save_experiment_report, set_random_seed, Logger, get_device
 from src.agent import BaseAgent, RandomAgent, DQNAgent
 from src.configs import DEFAULT_DQN_CONFIG
 from src.trainer import train, evaluate
 from src.template import SimpleGridEnv, pre_process
 
-def main():
-    # experiment configuration:
+
+def run_single_experiment(custom_config: Dict, exp_name: str):
+    """Runs one full training loop with specific config"""
+    
+    # setup config
     config = DEFAULT_DQN_CONFIG.copy()
-    config.update({
-        # ** to customize experiment - add/override config entries here **
-        "env_name": "SimpleGrid",
-        "max_steps": 200,
-        "training_episodes": 600,
-        "inference_episodes": 10,
-        "buffer_capacity": 100000,   # replay buffer for DQN 
-    })
-
-    # setup infra:
-    set_random_seed(seed=config["seed"])
-    device = get_device()
-    print(f"Running on: {device}")
+    config.update(custom_config)
+    
+    # setup logger (append exp_name to folder)
+    original_algo_name = config['algo']
+    config['algo'] = f"{original_algo_name}_{exp_name}" # todo: better way?
     logger = Logger(config=config)
-    
 
-    # init environment (from template)
-    env = SimpleGridEnv(max_steps=config["max_steps"], preprocess=pre_process) 
+    device = get_device()
+    set_random_seed(config["seed"])
     
-    # init agent
+    print(f"--- Starting Experiment: {exp_name} ---")
+    
+    # init env + agent
+    env = SimpleGridEnv(preprocess=pre_process, max_steps=200)
     agent = DQNAgent(
         config=config, 
         obs_shape=config["obs_shape"], 
-        num_actions=env.action_space.n,
+        num_actions=env.action_space.n, 
         device=device
     )
 
-    # run training
-    train(env=env, agent=agent, logger=logger, config=config)
-    plot_training_curves(log_dir=logger.log_directory)
+    # training (note @timer decorator on train(), adds runtime to output)
+    train_metrics, train_time = train(env=env, agent=agent, logger=logger, config=config)
+    plot_training_curves(logger.log_directory)
 
-    # run inference
-    evaluate(
+    # inference (note @timer decorator on evaluate(), adds runtime to output)
+    inference_metrics, inference_time = evaluate(
         env=env, 
-        agent=agent,
-        logger=logger,
+        agent=agent, 
+        logger=logger, 
         config=config, 
-        save_dir=logger.log_directory, 
+        save_dir=logger.log_directory
     )
     analyze_inference(logger.log_directory)
+
+    # collect training + inference metrics
+    experiment_metrics = train_metrics | inference_metrics 
+    timings = {
+        "train": str(timedelta(seconds=int(train_time))),
+        "inference": str(timedelta(seconds=int(inference_time))),
+    }
+
+    # genereate experiment report
+    save_experiment_report(
+        log_dir=logger.log_directory, 
+        config=config, 
+        metrics=experiment_metrics,
+        timings=timings
+    )
+    
+    print(f"--- Finished: {exp_name} ---\n")
+
+
+def main():
+    # define exp set:
+    experiments = [
+        {
+            "name": "Baseline_LR_250u",
+            "config": {
+                "learning_rate": 2.5e-4,
+                "env_name": "SimpleGrid",
+                "max_steps": 200,
+                "training_episodes": 600,
+                "inference_episodes": 10,
+                "buffer_capacity": 100000,   # replay buffer for DQN 
+            },
+        },
+        {
+            "name": "High_LR_1m",
+            "config": {
+                "learning_rate": 1e-3,
+                "env_name": "SimpleGrid",
+                "max_steps": 200,
+                "training_episodes": 600,
+                "inference_episodes": 10,
+                "buffer_capacity": 100000,   # replay buffer for DQN 
+            },
+        },
+    ]        
+
+    for exp in experiments:
+        run_single_experiment(exp["config"], exp["name"])
+
 
 if __name__ == "__main__":
     main()

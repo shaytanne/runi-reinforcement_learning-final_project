@@ -1,15 +1,17 @@
+import csv
 import json
 import os
-import csv
-import time
 import random
+import time
+from datetime import timedelta
+from functools import wraps
 from typing import Dict, Optional
 
+import imageio
 import numpy as np
 import pandas as pd
-import imageio
-from matplotlib import pyplot as plt
 import torch
+from matplotlib import pyplot as plt
 
 from src.agent import BaseAgent
 
@@ -32,8 +34,33 @@ def get_device() -> torch.device:
     return torch.device(processor_type)
 
 
+# ** TIMER UTIL(S) **
+def timer(func):
+    """
+    Measures running time of decorated function
+    :returns: (function output, time delta)
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        # sync CPU & GPU if using cuda
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)      # output of decorated function
+        
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+
+        end_time = time.perf_counter()
+        time_delta = timedelta(seconds=int(end_time - start_time))
+        # print(f"Function {func.__name__} took {time_delta}")
+        return result, time_delta
+    return wrapper
+
+
 # ##########
-# PLOTTING UTILS
+# UTILS FOR RECORDING RESULTS (PLOTTING, REPORTS)
 # ##########
 def plot_training_curves(log_dir: str, window: int = 50) -> None:
     """
@@ -182,9 +209,31 @@ def analyze_inference(log_dir: str) -> None:
         print(f"Error analyzing inference: {e}")
          
 
-# ##########
-# LOGGING
-# ##########
+def save_experiment_report(log_dir: str, config: Dict, metrics: Dict, timings: Dict) -> None:
+    """
+    Collects high-level experiment information in JSON report
+    - config
+    - results
+    - time measurements
+    """
+    report = {
+        "meta": {
+            "algo": config.get("algo"),
+            "env": config.get("env_name"),
+            "timestamp": time.strftime("%Y%m%d-%H%M%S")
+        },
+        "configuration": config,
+        "performance": timings,
+        "results": metrics
+    }
+    
+    report_path = os.path.join(log_dir, "experiment_report.json")
+    with open(report_path, "w") as f:
+        json.dump(report, f, indent=4)
+        
+    print(f"Experiment report saved to: {report_path}")
+
+
 class Logger:
     """Logging service for the system"""
 
