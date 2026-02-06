@@ -244,10 +244,16 @@ class SimpleGridEnv(BaseMiniGridEnv):
         obs, reward, terminated, truncated, info = super().step(action)
 
         # ----- REWARD SHAPING: EDIT BELOW THIS LINE -----
+        # fetcth reward config if it exists
+        reward_config = getattr(self, "reward_shaping", {})  
+        
+        # goal reward
         if terminated:
-            reward = 1.0
-        else:
-            reward = 0.0
+            reward += reward_config.get("goal", 1.0)
+
+        # step penalty
+        reward -= reward_config.get("step", 0.0)
+
         # ----- REWARD SHAPING: EDIT ABOVE THIS LINE -----
 
         return self._get_obs(obs), reward, terminated, truncated, info

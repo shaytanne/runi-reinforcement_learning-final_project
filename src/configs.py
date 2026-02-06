@@ -15,7 +15,7 @@ DEFAULT_DQN_CONFIG.update({
     "algo": "DQN",
     "gamma": 0.99,               
     "batch_size": 32,            
-    "buffer_capacity": 100000,       
+    "buffer_capacity": 100000,   # replay buffer for DQN 
     "learning_rate": 2.5e-4,     
     "epsilon_start": 1.0,        # initial epsilon
     "epsilon_min": 0.05,         # minimum epsilon

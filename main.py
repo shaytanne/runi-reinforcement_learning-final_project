@@ -26,8 +26,11 @@ def run_single_experiment(custom_config: Dict, exp_name: str):
     
     print(f"--- Starting Experiment: {exp_name} ---")
     
-    # init env + agent
+    # init env
     env = SimpleGridEnv(preprocess=pre_process, max_steps=200)
+    env.reward_config = config.get("reward_config") # injects configurable reward shaping into env # todo 
+    
+    # init agent
     agent = DQNAgent(
         config=config, 
         obs_shape=config["obs_shape"], 
@@ -73,23 +76,37 @@ def main():
         {
             "name": "Baseline_LR_250u",
             "config": {
+                **DEFAULT_DQN_CONFIG,
                 "learning_rate": 2.5e-4,
                 "env_name": "SimpleGrid",
                 "max_steps": 200,
                 "training_episodes": 600,
                 "inference_episodes": 10,
-                "buffer_capacity": 100000,   # replay buffer for DQN 
+                "reward_shaping": {
+                    "key": 1.0,  
+                    "door": 5.0, 
+                    "ball": 10.0,
+                    "goal": 50.0,
+                    "step": -0.01,
+                },
             },
         },
         {
             "name": "High_LR_1m",
             "config": {
+                **DEFAULT_DQN_CONFIG,
                 "learning_rate": 1e-3,
                 "env_name": "SimpleGrid",
                 "max_steps": 200,
                 "training_episodes": 600,
                 "inference_episodes": 10,
-                "buffer_capacity": 100000,   # replay buffer for DQN 
+                "reward_shaping": {
+                    "key": 1.0,  
+                    "door": 5.0, 
+                    "ball": 10.0,
+                    "goal": 50.0,
+                    "step": -0.01,
+                },
             },
         },
     ]        
