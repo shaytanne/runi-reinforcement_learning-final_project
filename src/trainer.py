@@ -80,11 +80,12 @@ def train(env: BaseMiniGridEnv, agent: BaseAgent, logger: Logger, config: Dict) 
         logger.log(episode, episode_rewards, episode_steps, epsilon=agent.epsilon, success=is_success)  # todo: pass real epsilon if used
         
         # printout:
+        print(f"\rEpisode {episode}/{num_episodes}")
         if episode % EPISODE_WINDOW_SIZE == 0:
             avg_reward = sum(reward_window) / len(reward_window)
             avg_steps = sum(steps_window) / len(steps_window)
             success_rate = sum(success_window) / len(success_window)
-            print(f"Episodes {episode-EPISODE_WINDOW_SIZE}-{episode}/{num_episodes} | "
+            print(f"\rEpisodes {episode-EPISODE_WINDOW_SIZE}-{episode}/{num_episodes} | "
                   f"Avg Reward: {avg_reward:.2f} | Avg Steps: {avg_steps:.2f} | Success Rate: {success_rate:.2f} | "
                   f"Epsilon: {agent.epsilon:.3f}")
     
