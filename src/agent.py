@@ -8,9 +8,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from src.model import MiniGridCNN
 from src.buffer import ReplayBuffer
-from src.configs import DEFAULT_DQN_CONFIG
+from src.experiments import PROJECT_BASE_CONFIG
+from src.model import MiniGridCNN
 
 
 class BaseAgent(ABC):
@@ -20,8 +20,6 @@ class BaseAgent(ABC):
     learning_rate: float
     device: torch.device
     config: Dict
-
-
 
     def __init__(self, config: Dict, obs_shape: np.ndarray, num_actions: int, device: torch.device):
         self.device = device
@@ -54,10 +52,10 @@ class RandomAgent(BaseAgent):
         return np.random.randint(0, self.num_actions)
 
     def step(self, obs, action, reward, next_obs, done):
-        pass # Do nothing
+        pass # do nothing
 
     def save(self, path):
-        pass # Do nothing
+        pass # do nothing
 
 
 class DQNAgent(BaseAgent):
@@ -68,7 +66,7 @@ class DQNAgent(BaseAgent):
         super().__init__(config=config, obs_shape=obs_shape, num_actions=num_actions, device=device)
         self.num_actions = num_actions
 
-        self.config = DEFAULT_DQN_CONFIG.copy()
+        self.config = PROJECT_BASE_CONFIG.copy()
         if config:
             self.config.update(config)
         

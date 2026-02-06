@@ -2,18 +2,18 @@ from datetime import timedelta
 import time
 from typing import Dict
 
+from src.experiments import PROJECT_BASE_CONFIG, DQN_SIMPLEGRID_BASELINE, DQN_SIMPLEGRID_STEP_PENALTY, DQN_SIMPLEGRID_STABLE_LOW_LR, DQN_SIMPLEGRID_LONG_EXPLORATION 
 from src.utils import analyze_inference, plot_training_curves, save_experiment_report, set_random_seed, Logger, get_device
 from src.agent import BaseAgent, RandomAgent, DQNAgent
-from src.configs import DEFAULT_DQN_CONFIG
 from src.trainer import train, evaluate
 from src.template import SimpleGridEnv, pre_process
 
 
 def run_single_experiment(custom_config: Dict, exp_name: str):
-    """Runs one full training loop with specific config"""
+    """Runs one full experiment according to config"""
     
-    # setup config
-    config = DEFAULT_DQN_CONFIG.copy()
+    # fetch config
+    config = PROJECT_BASE_CONFIG.copy()
     config.update(custom_config)
     
     # setup logger (append exp_name to folder)
@@ -28,7 +28,7 @@ def run_single_experiment(custom_config: Dict, exp_name: str):
     
     # init env
     env = SimpleGridEnv(preprocess=pre_process, max_steps=200)
-    env.reward_config = config.get("reward_config") # injects configurable reward shaping into env # todo 
+    env.reward_shaping = config.get("reward_shaping") # injects configurable reward shaping into env # todo 
     
     # init agent
     agent = DQNAgent(
@@ -73,42 +73,10 @@ def run_single_experiment(custom_config: Dict, exp_name: str):
 def main():
     # define exp set:
     experiments = [
-        {
-            "name": "Baseline_LR_250u",
-            "config": {
-                **DEFAULT_DQN_CONFIG,
-                "learning_rate": 2.5e-4,
-                "env_name": "SimpleGrid",
-                "max_steps": 200,
-                "training_episodes": 600,
-                "inference_episodes": 10,
-                "reward_shaping": {
-                    "key": 1.0,  
-                    "door": 5.0, 
-                    "ball": 10.0,
-                    "goal": 50.0,
-                    "step": -0.01,
-                },
-            },
-        },
-        {
-            "name": "High_LR_1m",
-            "config": {
-                **DEFAULT_DQN_CONFIG,
-                "learning_rate": 1e-3,
-                "env_name": "SimpleGrid",
-                "max_steps": 200,
-                "training_episodes": 600,
-                "inference_episodes": 10,
-                "reward_shaping": {
-                    "key": 1.0,  
-                    "door": 5.0, 
-                    "ball": 10.0,
-                    "goal": 50.0,
-                    "step": -0.01,
-                },
-            },
-        },
+        DQN_SIMPLEGRID_BASELINE,
+        DQN_SIMPLEGRID_STEP_PENALTY,
+        DQN_SIMPLEGRID_STABLE_LOW_LR,
+        DQN_SIMPLEGRID_LONG_EXPLORATION,
     ]        
 
     for exp in experiments:

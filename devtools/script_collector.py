@@ -84,7 +84,6 @@ def collect_scripts(source_files, output_file):
 
 if __name__ == "__main__":
     # Define the project root and source directory
-    # Using constants from src.config
     root_dir = ROOT_DIR
     src_dir = SRC_DIR
     
@@ -92,7 +91,7 @@ if __name__ == "__main__":
     # Dependencies should come before usage.
     files = [
         os.path.join(SRC_DIR, "constants.py"),
-        os.path.join(SRC_DIR, "configs.py"),
+        os.path.join(SRC_DIR, "experiments.py"),
         os.path.join(SRC_DIR, "utils.py"),
         os.path.join(SRC_DIR, "buffer.py"),
         os.path.join(SRC_DIR, "model.py"),

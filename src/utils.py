@@ -53,7 +53,7 @@ def timer(func):
             torch.cuda.synchronize()
 
         end_time = time.perf_counter()
-        time_delta = timedelta(seconds=int(end_time - start_time))
+        time_delta = (end_time - start_time)
         # print(f"Function {func.__name__} took {time_delta}")
         return result, time_delta
     return wrapper
