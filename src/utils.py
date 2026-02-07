@@ -32,6 +32,7 @@ def set_random_seed(seed: int) -> None:
 def get_device() -> torch.device:
     """Returns the device that runs training (GPU/CPU)"""
     processor_type = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {processor_type}")
     return torch.device(processor_type)
 
 
@@ -70,6 +71,10 @@ class MetricsHandler:
             self.rewards = deque(maxlen=window_size)
             self.step_counts = deque(maxlen=window_size)
             self.success_counts = deque(maxlen=window_size)
+        else:
+            self.rewards = []
+            self.step_counts = []
+            self.success_counts = []
         
     def update(self, reward: float, steps: int, success: bool):
         self.rewards.append(reward)

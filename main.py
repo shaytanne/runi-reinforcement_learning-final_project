@@ -52,10 +52,10 @@ def run_single_experiment(custom_config: Dict, exp_name: str):
 def main():
     # define exp set:
     experiments = [
-        DQN_SIMPLEGRID_BASELINE,
         DQN_SIMPLEGRID_STEP_PENALTY,
         DQN_SIMPLEGRID_STABLE_LOW_LR,
         DQN_SIMPLEGRID_LONG_EXPLORATION,
+        DQN_SIMPLEGRID_BASELINE,
     ]        
 
     for exp in experiments:
