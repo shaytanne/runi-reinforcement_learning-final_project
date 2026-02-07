@@ -1,3 +1,4 @@
+import copy
 import time
 
 
@@ -34,34 +35,28 @@ PROJECT_BASE_CONFIG = {
 # 1. baseline
 DQN_SIMPLEGRID_BASELINE = {
     "name": "1_Baseline",
-    "config": PROJECT_BASE_CONFIG.copy(),
+    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
 }
 
 # 2. reward shaoing: step penalty
 DQN_SIMPLEGRID_STEP_PENALTY = {
     "name": "2_Step_Penalty",
-    "config": {
-        **PROJECT_BASE_CONFIG,
-        "reward_shaping": {"step": -0.01, "goal": 1.0}
-    },
+    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
 }
+DQN_SIMPLEGRID_STEP_PENALTY["config"]["reward_shaping"] = {"step": 0.01, "goal": 1.0}
 
 # 3. stability focus: low LR, slower target updates
 DQN_SIMPLEGRID_STABLE_LOW_LR = {
     "name": "3_Stable_LowLR",
-    "config": {
-        **PROJECT_BASE_CONFIG,
-        "learning_rate": 1e-4,
-        "target_update_freq": 2000,
-    },
+    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
 }
+DQN_SIMPLEGRID_STABLE_LOW_LR["config"]["learning_rate"] = 1e-4
+DQN_SIMPLEGRID_STABLE_LOW_LR["config"]["target_update_freq"] = 2000
 
 # 4. long exploration (epsilon: slow decay, lower min)
 DQN_SIMPLEGRID_LONG_EXPLORATION = {
     "name": "4_Long_Exploration",
-    "config": {
-        **PROJECT_BASE_CONFIG,
-        "epsilon_decay": 0.999,
-        "epsilon_min": 0.1,
-    },
+    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
 }
+DQN_SIMPLEGRID_LONG_EXPLORATION["config"]["epsilon_decay"] = 0.999
+DQN_SIMPLEGRID_LONG_EXPLORATION["config"]["epsilon_min"] = 0.1

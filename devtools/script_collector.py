@@ -97,7 +97,7 @@ if __name__ == "__main__":
         os.path.join(SRC_DIR, "buffer.py"),
         os.path.join(SRC_DIR, "model.py"),
         os.path.join(SRC_DIR, "agent.py"),
-        os.path.join(SRC_DIR, "trainer.py"),
+        os.path.join(SRC_DIR, "experiment_runner.py"),
         os.path.join(ROOT_DIR, "main.py"),
     ]
     

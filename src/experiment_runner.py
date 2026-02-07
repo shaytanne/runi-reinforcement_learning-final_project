@@ -90,7 +90,7 @@ class Experiment:
                 print(f"Mid-training video saved to {self.video_recorder.filename}")
             
             # log + print episode metrics
-            is_success = (episode_rewards > 0) # goal reached with positive reward # todo: change definition?
+            is_success = terminated
             metrics_handler.update(reward=episode_rewards, steps=episode_steps, success=is_success)
             metrics_handler.print_training_status(episode=episode, epsilon=self.agent.epsilon)
             self.logger.log(filename="training_log", 
@@ -139,7 +139,7 @@ class Experiment:
                 print(f"Post-training video saved during inference to {self.video_recorder.filename}")
 
             # log episode metrics
-            is_success = (episode_rewards > 0) # goal reached with positive reward # todo: change definition?
+            is_success = terminated
             metrics_handler.update(reward=episode_rewards, steps=episode_steps, success=is_success)
             self.logger.log(filename="inference_log", 
                             episode=episode, reward=episode_rewards, steps=episode_steps, success=is_success)

@@ -3,7 +3,7 @@ from typing import Dict
 
 from src.experiments import PROJECT_BASE_CONFIG, DQN_SIMPLEGRID_BASELINE, DQN_SIMPLEGRID_STEP_PENALTY, DQN_SIMPLEGRID_STABLE_LOW_LR, DQN_SIMPLEGRID_LONG_EXPLORATION 
 from src.utils import analyze_inference, plot_training_curves, save_experiment_report, set_random_seed, get_device
-from src.trainer import Experiment
+from src.experiment_runner import Experiment
 
 
 def run_single_experiment(custom_config: Dict, exp_name: str):

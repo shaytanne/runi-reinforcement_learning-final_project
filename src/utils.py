@@ -106,6 +106,7 @@ class MetricsHandler:
         }
 
     def print_training_status(self, episode: int, epsilon: float) -> None:
+        print(f"\rEpisode {episode}/{self.num_episodes}", end="", flush=True)
         if episode % self.window == 0:
             print(f"\rEpisodes {episode-self.window}-{episode}/{self.num_episodes} | "
                   f"Avg R: {self.avg_reward:.2f} | Avg Steps: {self.avg_steps:.1f} | "

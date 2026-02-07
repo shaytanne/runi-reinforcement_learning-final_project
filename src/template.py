@@ -249,7 +249,7 @@ class SimpleGridEnv(BaseMiniGridEnv):
         
         # goal reward
         if terminated:
-            reward += reward_config.get("goal", 1.0)
+            reward = reward_config.get("goal", 1.0)
 
         # step penalty
         reward -= reward_config.get("step", 0.0)

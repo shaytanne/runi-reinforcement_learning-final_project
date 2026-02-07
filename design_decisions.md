@@ -7,3 +7,4 @@ Design Decisions:
 * model architecture
 * reward shaping
 * step limit & training episodes
+* initializations
