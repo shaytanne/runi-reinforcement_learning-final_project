@@ -186,9 +186,9 @@ class DQNAgent(BaseAgent):
         )
         self.optimizer.step()
 
-    @property
-    def name(self):
-        return "DQN"
+    # @property
+    # def name(self):
+    #     return "DQN"
     
     def save(self, path: str) -> None:
         torch.save(self.policy_net.state_dict(), path)

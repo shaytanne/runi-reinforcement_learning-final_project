@@ -1,56 +1,35 @@
 from datetime import timedelta
-import time
 from typing import Dict
 
 from src.experiments import PROJECT_BASE_CONFIG, DQN_SIMPLEGRID_BASELINE, DQN_SIMPLEGRID_STEP_PENALTY, DQN_SIMPLEGRID_STABLE_LOW_LR, DQN_SIMPLEGRID_LONG_EXPLORATION 
-from src.utils import analyze_inference, plot_training_curves, save_experiment_report, set_random_seed, Logger, get_device
-from src.agent import BaseAgent, RandomAgent, DQNAgent
-from src.trainer import train, evaluate
-from src.template import SimpleGridEnv, pre_process
+from src.utils import analyze_inference, plot_training_curves, save_experiment_report, set_random_seed, get_device
+from src.trainer import Experiment
 
 
 def run_single_experiment(custom_config: Dict, exp_name: str):
     """Runs one full experiment according to config"""
-    
+    print(f"--- Starting Experiment: {exp_name} ---")
+
     # fetch config
     config = PROJECT_BASE_CONFIG.copy()
     config.update(custom_config)
     
-    # setup logger (append exp_name to folder)
+    # append exp_name to folder# todo
     original_algo_name = config['algo']
     config['algo'] = f"{original_algo_name}_{exp_name}" # todo: better way?
-    logger = Logger(config=config)
 
     device = get_device()
     set_random_seed(config["seed"])
     
-    print(f"--- Starting Experiment: {exp_name} ---")
-    
-    # init env
-    env = SimpleGridEnv(preprocess=pre_process, max_steps=200)
-    env.reward_shaping = config.get("reward_shaping") # injects configurable reward shaping into env # todo 
-    
-    # init agent
-    agent = DQNAgent(
-        config=config, 
-        obs_shape=config["obs_shape"], 
-        num_actions=env.action_space.n, 
-        device=device
-    )
+    exp = Experiment(config=config, device=device)
 
     # training (note @timer decorator on train(), adds runtime to output)
-    train_metrics, train_time = train(env=env, agent=agent, logger=logger, config=config)
-    plot_training_curves(logger.log_directory)
+    train_metrics, train_time = exp.train()
+    plot_training_curves(log_dir=exp.results_dir)
 
     # inference (note @timer decorator on evaluate(), adds runtime to output)
-    inference_metrics, inference_time = evaluate(
-        env=env, 
-        agent=agent, 
-        logger=logger, 
-        config=config, 
-        save_dir=logger.log_directory
-    )
-    analyze_inference(logger.log_directory)
+    inference_metrics, inference_time = exp.evaluate()
+    analyze_inference(log_dir=exp.results_dir)
 
     # collect training + inference metrics
     experiment_metrics = train_metrics | inference_metrics 
@@ -61,7 +40,7 @@ def run_single_experiment(custom_config: Dict, exp_name: str):
 
     # genereate experiment report
     save_experiment_report(
-        log_dir=logger.log_directory, 
+        log_dir=exp.results_dir, 
         config=config, 
         metrics=experiment_metrics,
         timings=timings

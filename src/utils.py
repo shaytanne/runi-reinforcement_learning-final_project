@@ -3,9 +3,9 @@ import json
 import os
 import random
 import time
-from datetime import timedelta
+from collections import deque
 from functools import wraps
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import imageio
 import numpy as np
@@ -14,6 +14,7 @@ import torch
 from matplotlib import pyplot as plt
 
 from src.agent import BaseAgent
+from src.template import BaseMiniGridEnv
 
 
 def set_random_seed(seed: int) -> None:
@@ -57,6 +58,58 @@ def timer(func):
         # print(f"Function {func.__name__} took {time_delta}")
         return result, time_delta
     return wrapper
+
+
+class MetricsHandler:
+    """Helper class to track/print/log metrics """
+
+    def __init__(self, num_episodes: int, window_size: int = None):
+        self.num_episodes = num_episodes
+        self.window = window_size
+        if window_size:
+            self.rewards = deque(maxlen=window_size)
+            self.step_counts = deque(maxlen=window_size)
+            self.success_counts = deque(maxlen=window_size)
+        
+    def update(self, reward: float, steps: int, success: bool):
+        self.rewards.append(reward)
+        self.step_counts.append(steps)
+        self.success_counts.append(int(success))
+
+    @property
+    def avg_reward(self) -> float:
+        return sum(self.rewards) / len(self.rewards) if self.rewards else 0.0
+
+    @property
+    def avg_steps(self) -> float:
+        return sum(self.step_counts) / len(self.step_counts) if self.step_counts else 0.0
+
+    @property
+    def success_rate(self) -> float:
+        return sum(self.success_counts) / len(self.success_counts) if self.success_counts else 0.0
+
+    def get_inference_metrics(self) -> Dict:
+        return {
+            "inference_episodes": self.num_episodes,
+            "inference_success_rate": self.success_rate,
+            "inference_avg_reward": self.avg_reward,
+            "inference_avg_steps": self.avg_steps
+        }
+
+    def get_training_metrics(self, epsilon: float) -> Dict:
+        return {
+            "train_episodes": self.num_episodes,
+            "train_final_epsilon": epsilon,
+            "train_window_success_rate": self.success_rate,
+            "train_window_avg_reward": self.avg_reward,
+            "train_window_avg_steps": self.avg_steps
+        }
+
+    def print_training_status(self, episode: int, epsilon: float) -> None:
+        if episode % self.window == 0:
+            print(f"\rEpisodes {episode-self.window}-{episode}/{self.num_episodes} | "
+                  f"Avg R: {self.avg_reward:.2f} | Avg Steps: {self.avg_steps:.1f} | "
+                  f"Success Rate: {self.success_rate:.2f} | epsilon: {epsilon:.3f}")
 
 
 # ##########
@@ -234,65 +287,59 @@ def save_experiment_report(log_dir: str, config: Dict, metrics: Dict, timings: D
     print(f"Experiment report saved to: {report_path}")
 
 
-class Logger:
-    """Logging service for the system"""
+class ExperimentLogger:
+    def __init__(self, save_dir: str):
+        self.results_dir = save_dir
+        os.makedirs(save_dir, exist_ok=True)
 
-    def __init__(self, config: Dict):
-        timestamp = time.strftime("%Y%m%d-%H%M%S")
-        self.log_directory = os.path.join("results", f"{config['algo']}_{timestamp}") # todo: rename algo
-        os.makedirs(self.log_directory, exist_ok=True)
+    def log(self, filename: str, **metrics):
+        """
+        Appends a dict of metrics to a CSV file
+        Creates the file and headers automatically on the first call.
+        """
+        path = os.path.join(self.results_dir, f"{filename}.csv")
         
-        # save config
-        config_path = os.path.join(self.log_directory, "config.json")
-        with open(config_path, "w") as f:
-            json.dump(config, f, indent=4)
-
-        #  init log file
-        self.csv_path = os.path.join(self.log_directory, "training_log.csv")
-        self.csv_file = open(self.csv_path, "w", newline="")
-        self.writer = csv.writer(self.csv_file)
-        self.writer.writerow(["episode", "reward", "steps", "epsilon", "success"])
-
-    def log(self, episode: int, reward: float, steps: int, epsilon: float, success: Optional[bool] = None) -> None:
-        """Adds single row to log file"""
-
-        row = [episode, reward, steps, epsilon]
-        if success is not None: # handle no success info
-            row.append(int(success))
-
-        self.writer.writerow(row)
-        self.csv_file.flush()
+        # convert dict to single-row df
+        df = pd.DataFrame([metrics])
+        
+        # append to CSV
+        write_header = not os.path.exists(path)
+        df.to_csv(
+            path_or_buf=path, 
+            mode='a',               # apend mode
+            header=write_header,    # if file is new
+            index=False
+        )
 
 
 class VideoRecorder:
     """Handles episode video recording, saves to MP4"""
-    def __init__(self, save_dir: str, env, agent: BaseAgent, fps: int = 10):
+    def __init__(self, save_dir: str, env: BaseMiniGridEnv, fps: int = 10):
         self.save_dir = save_dir
         self.fps = fps
         self.frames = []
         self.recording = False
         self.filename = None
-
         self.env = env
-        self.agent = agent
-
 
     def start(self, stage: str) -> None:
         self.recording = True
         self.frames = []
-        env_name = self.env.__class__.__name__
-        self.filename = f"{self.agent.name}_{env_name}_{stage}.mp4"
+        self.filename = f"{stage}.mp4"
 
     def capture(self) -> None:
         if self.recording:
-            frame = self.env.render() # render mode must be 'rgb_array'
-            self.frames.append(frame)
+            try:
+                frame = self.env.render() # render mode must be 'rgb_array'
+                self.frames.append(frame)
+            except Exception as e:
+                print(f"WARNING: Failed to capture video frame: {e}")
 
     def stop(self) -> None:
         if self.recording and self.frames:
             path = os.path.join(self.save_dir, self.filename)
             try:
-                imageio.mimsave(path, self.frames, fps=self.fps)
+                imageio.mimsave(uri=path, ims=self.frames, fps=self.fps)
                 print(f"Video saved: {path}")
             except Exception as e:
                 print(f"Video save failed: {e}")
