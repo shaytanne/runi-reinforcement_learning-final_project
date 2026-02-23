@@ -21,6 +21,7 @@ PROJECT_BASE_CONFIG = {
     "epsilon_decay": 0.995,     # epsilon decay rate
     "batch_size": 32,           # batch size
     "buffer_capacity": 100000,  # replay buffer capacity
+    "min_buffer_size": 1000,    # minimum buffer size before training
     "training_freq": 4,         # train (backprop) every N(=4) steps
     "target_update_freq": 1000, # sync target network every N(=1000) steps
     "grad_clip": 1.0,           # gradient clipping value

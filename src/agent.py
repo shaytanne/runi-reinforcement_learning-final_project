@@ -28,13 +28,31 @@ class BaseAgent(ABC):
     def choose_action(self, obs, epsilon=0.0) -> int:
         raise NotImplementedError
     
-    @abstractmethod
     def step(self, obs, action: int, reward: float, next_obs, done):
-        """Stores experience + updates the model"""
+        """
+        Optional method: stores experience + updates the model in single call (off-policy)
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement step(). "
+            "This is only needed for per-step update algorithms (e.g. DQN)."
+        )
+
+    @abstractmethod
+    def update(self, *args, **kwargs) -> Dict:
+        """
+        Update agent parameters
+        DQN: called via step()
+        A2C: called with trajectory list
+        """
         raise NotImplementedError
     
     @abstractmethod
     def save(self, path: str):
+        raise NotImplementedError
+    
+    @abstractmethod
+    def load(self, filepath: str):
+        """Load agent params from checkpoint"""
         raise NotImplementedError
 
     @property
@@ -54,7 +72,13 @@ class RandomAgent(BaseAgent):
     def step(self, obs, action, reward, next_obs, done):
         pass # do nothing
 
+    def update(self, *args, **kwargs):
+        pass # do nothing
+
     def save(self, path):
+        pass # do nothing
+
+    def load(self, filepath: str):
         pass # do nothing
 
 
@@ -77,6 +101,7 @@ class DQNAgent(BaseAgent):
         self.epsilon_decay: float = self.config.get("epsilon_decay")
         self.learning_rate: float = self.config.get("learning_rate")
         self.batch_size: int = self.config.get("batch_size")
+        self.min_buffer_size: int = self.config.get("min_buffer_size")
         self.training_freq: int = self.config.get("training_freq")
         self.target_update_freq: int = self.config.get("target_update_freq")
 
@@ -140,8 +165,8 @@ class DQNAgent(BaseAgent):
         self.memory.add(obs=obs, action=action, reward=reward, next_obs=next_obs, done=done)
         
         # train
-        if (len(self.memory) >= self.batch_size) and (self.steps_done % self.training_freq == 0):
-            self._learn()
+        if (len(self.memory) >= self.min_buffer_size) and (self.steps_done % self.training_freq == 0):
+            self.update()
             
         # update target net logic:
         if self.steps_done % self.target_update_freq == 0:
@@ -151,7 +176,7 @@ class DQNAgent(BaseAgent):
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-    def _learn(self):
+    def update(self):
         """
         Core DQN update logic
         """
@@ -185,10 +210,41 @@ class DQNAgent(BaseAgent):
             max_norm=1.0
         )
         self.optimizer.step()
-
+    
     # @property
     # def name(self):
     #     return "DQN"
     
     def save(self, path: str) -> None:
-        torch.save(self.policy_net.state_dict(), path)
+        """
+        Save agent snapshot at checkpoint
+        - policy net
+        - target net
+        - optimizer state
+        - step counter
+        - epsilon
+        - config
+        """
+        agent_dict = {
+            'policy_net_state_dict': self.policy_net.state_dict(),
+            'target_net_state_dict': self.target_net.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'steps_done': self.steps_done,
+            'epsilon': self.epsilon,
+            'config': self.config,
+        }
+        torch.save(agent_dict, path)
+        print(f"[DQN] Checkpoint saved to {path}")
+
+    def load(self, filepath: str) -> None:
+        """
+        Load agent state from a checkpoint file.
+        Restores networks, optimizer, step counter, and epsilon so training can resume exactly.
+        """
+        checkpoint = torch.load(filepath, map_location=self.device)
+        self.policy_net.load_state_dict(checkpoint['policy_net_state_dict'])
+        self.target_net.load_state_dict(checkpoint['target_net_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.steps_done = checkpoint['steps_done']
+        self.epsilon    = checkpoint['epsilon']
+        print(f"[DQN] Checkpoint loaded from {filepath} (step: {self.steps_done}, ε: {self.epsilon:.4f})")
