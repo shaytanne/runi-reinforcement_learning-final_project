@@ -1,16 +1,16 @@
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Dict, List, Tuple
 import random
 
 import numpy as np
-from pyparsing import Optional
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 
 from src.buffer import ReplayBuffer
 from src.experiments import PROJECT_BASE_CONFIG
-from src.model import MiniGridCNN
+from src.model import ActorCriticNetwork, MiniGridCNN
 
 
 class BaseAgent(ABC):
@@ -107,10 +107,10 @@ class DQNAgent(BaseAgent):
 
         # init networks:
         # policy net (main trained network)
-        self.policy_net = MiniGridCNN(input_shape=obs_shape, num_actions=num_actions).to(device)
+        self.policy_net = MiniGridCNN(observation_shape=obs_shape, num_actions=num_actions).to(device)
 
         # target net (stable reference)
-        self.target_net = MiniGridCNN(input_shape=obs_shape, num_actions=num_actions).to(device)
+        self.target_net = MiniGridCNN(observation_shape=obs_shape, num_actions=num_actions).to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval() # target net never in training mode
 
@@ -211,10 +211,6 @@ class DQNAgent(BaseAgent):
         )
         self.optimizer.step()
     
-    # @property
-    # def name(self):
-    #     return "DQN"
-    
     def save(self, path: str) -> None:
         """
         Save agent snapshot at checkpoint
@@ -248,3 +244,168 @@ class DQNAgent(BaseAgent):
         self.steps_done = checkpoint['steps_done']
         self.epsilon    = checkpoint['epsilon']
         print(f"[DQN] Checkpoint loaded from {filepath} (step: {self.steps_done}, ε: {self.epsilon:.4f})")
+
+
+class A2CAgent(BaseAgent):
+    """
+    A2C (Actor-Critic) Agent
+    Components:
+    - Actor: learns policy π(a|s) — what action to take
+    - Critic: learns value function V(s) — how good is the state
+    - Advantage: A(s,a) = R + γ*V(s') - V(s) — how much better is action a vs avg
+
+    Obs format: receives uint8 (H, W, C), normalizes + transposes internally
+    No replay buffer — updates once per episode (or other freq)
+    """
+
+    def __init__(self, config: Dict, obs_shape: np.ndarray, num_actions: int, device: torch.device):
+        """
+        :param obs_shape:   (H, W, C) — e.g. (84, 84, 1)
+        """
+        super().__init__(config=config, obs_shape=obs_shape, num_actions=num_actions, device=device)
+
+        self.num_actions = num_actions
+        self.config = config
+
+        # hyperparams
+        self.gamma          = config.get('gamma', 0.99)
+        self.learning_rate  = config.get('learning_rate', 1e-4)
+        self.value_loss_coefficient = config.get('value_loss_coef', 0.5)
+        self.entropy_coefficient   = config.get('entropy_coef', 0.01)
+        self.max_grad_norm  = config.get('max_grad_norm', 0.5)
+
+        # epsilon = 0.0 always (A2C stochastic by policy, not epsilon-greedy)
+        self.epsilon = 0.0  # attribute kept to adhere to interface
+
+        # step counter
+        self.steps_done = 0
+
+        # Actor-Critic network — receives (H, W, C)
+        self.network = ActorCriticNetwork(observation_shape=obs_shape, num_actions=num_actions).to(device)
+
+        # single optimizer for both actor and critic heads
+        self.optimizer = torch.optim.Adam(params=self.network.parameters(), lr=self.learning_rate)
+
+    def choose_action(self, obs: np.ndarray, epsilon: float | None = None) -> int:
+        """
+        Sample action from current policy π(a|s) (stochastic during training)
+        If epsilon=0 (eval mode), act greedily (argmax action probs)
+        
+        :param obs: uint8 ndarray (H, W, C)
+        :param epsilon: ignored during training (A2C explores via policy entropy) # todo
+        - pass 0.0 explicitly to get deterministic/greedy inference behaviour
+        :return: action index
+        """
+        with torch.no_grad():
+            obs_tensor = torch.as_tensor(obs, device=self.device).float()   # uint8 -> float32
+            obs_tensor = obs_tensor.div(255.0)                              # normalize to [0,1]
+            obs_tensor = obs_tensor.permute(2, 0, 1).unsqueeze(0)           # (H, W, C) -> (1, C, H, W)
+
+
+            action_logits, _ = self.network(obs_tensor)
+            action_probs = F.softmax(action_logits, dim=-1)
+
+            # greedy for eval (epsilon=0.0), stochastic for training
+            if epsilon == 0.0:
+                return int(action_probs.argmax(dim=-1).item())
+
+            action_dist = torch.distributions.Categorical(action_probs)
+            return int(action_dist.sample().item())
+
+    def update(self, trajectories: List[Tuple[np.ndarray, int, float, np.ndarray, bool]]) -> Dict:
+        """
+        Update actor + critic from full episode (or some freq)
+
+        :param trajectories: list trajectory data objects (obs, action, reward, next_obs, done)
+                          obs, next_obs are uint8 (H, W, C) ndarrays
+        :return: update values object (actor_loss, critic_loss, entropy, total_loss, mean_advantage)
+        """
+        if len(trajectories) == 0:
+            return {}
+
+        states, actions, rewards, next_states, dones = zip(*trajectories)
+
+        # states: uint8 (N, H, W, C) -> float32 (N, C, H, W), normalized
+        states      = torch.as_tensor(np.array(states),      device=self.device).float().div(255.0).permute(0, 3, 1, 2)
+        next_states = torch.as_tensor(np.array(next_states), device=self.device).float().div(255.0).permute(0, 3, 1, 2)
+        
+        actions     = torch.tensor(actions, dtype=torch.long,    device=self.device)
+        rewards     = torch.tensor(rewards, dtype=torch.float32, device=self.device)
+        dones       = torch.tensor(dones,   dtype=torch.float32, device=self.device)
+
+        # forward pass thru shared network
+        action_logits, state_vals = self.network(states)
+        action_probs = F.softmax(action_logits, dim=-1)
+        state_vals = state_vals.squeeze()
+
+        # bootstrap next state values from critic
+        with torch.no_grad():
+            _, next_state_vals = self.network(next_states)
+            next_state_vals = next_state_vals.squeeze()
+
+        # TD target: R + γ * V(s') * (1 - done)
+        td_target = rewards + self.gamma * next_state_vals * (1 - dones)
+
+        # advantage: A(s,a) = TD target - V(s)
+        advantage = td_target - state_vals
+
+        # Actor loss: -log π(a|s) * A(s,a)
+        action_dist = torch.distributions.Categorical(action_probs)
+        log_probs = action_dist.log_prob(actions)
+        actor_loss = -(log_probs * advantage.detach()).mean()
+
+        # Critic loss: MSE(V(s), TD target)
+        critic_loss = F.mse_loss(state_vals, td_target.detach())
+
+        # entropy bonus: encourage exploration (punish overconfident policies)
+        entropy = action_dist.entropy().mean()
+
+        # combined loss
+        total_loss = (
+            actor_loss
+            + self.value_loss_coefficient * critic_loss
+            - self.entropy_coefficient * entropy
+        )
+
+        # optimize
+        self.optimizer.zero_grad()
+        total_loss.backward()
+        nn.utils.clip_grad_norm_(parameters=self.network.parameters(), max_norm=self.max_grad_norm)
+        self.optimizer.step()
+
+        self.steps_done += 1
+
+        return {
+            'actor_loss':     actor_loss.item(),
+            'critic_loss':    critic_loss.item(),
+            'entropy':        entropy.item(),
+            'total_loss':     total_loss.item(),
+            'mean_advantage': advantage.mean().item(),
+        }
+
+    def save(self, path: str) -> None:
+        """
+        Save agent snapshot at checkpoint
+        - network state
+        - optimizer state
+        - step counter
+        - config 
+        """
+        agent_dict = {
+            'network_state_dict':   self.network.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'steps_done':           self.steps_done,
+            'config':               self.config,
+        }
+        torch.save(agent_dict, path)
+        print(f"[A2C] Checkpoint saved to {path}")
+
+    def load(self, filepath: str) -> None:
+        """
+        Load network + optimizer state from checkpoint
+        """
+        checkpoint = torch.load(filepath, map_location=self.device)
+        self.network.load_state_dict(checkpoint['network_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.steps_done = checkpoint['steps_done']
+        print(f"[A2C] Checkpoint loaded from {filepath} (step: {self.steps_done})")
