@@ -1,27 +1,29 @@
+import copy
 from datetime import timedelta
 from typing import Dict
 
-from src.experiments import PROJECT_BASE_CONFIG, DQN_SIMPLEGRID_BASELINE, DQN_SIMPLEGRID_STEP_PENALTY, DQN_SIMPLEGRID_STABLE_LOW_LR, DQN_SIMPLEGRID_LONG_EXPLORATION 
-from src.utils import analyze_inference, plot_training_curves, save_experiment_report, set_random_seed, get_device
+from src.experiments import (
+    PROJECT_BASE_CONFIG, 
+    DQN_SIMPLEGRID_BASELINE, 
+    DQN_SIMPLEGRID_STEP_PENALTY, 
+    DQN_SIMPLEGRID_STABLE_LOW_LR, 
+    DQN_SIMPLEGRID_LONG_EXPLORATION, 
+    A2C_SIMPLEGRID_BASELINE, 
+    A2C_SIMPLEGRID_LOW_ENTROPY, 
+    A2C_KEYDOORBALL_BASELINE
+)
 from src.experiment_runner import Experiment
+from src.utils import analyze_inference, plot_training_curves, save_experiment_report, set_random_seed, get_device
 
 
-def run_single_experiment(custom_config: Dict, exp_name: str):
+def run_single_experiment(config: Dict, exp_name: str) -> None:
     """Runs one full experiment according to config"""
     print(f"--- Starting Experiment: {exp_name} ---")
-
-    # fetch config
-    config = PROJECT_BASE_CONFIG.copy()
-    config.update(custom_config)
-    
-    # append exp_name to folder# todo
-    original_algo_name = config['algo']
-    config['algo'] = f"{original_algo_name}_{exp_name}" # todo: better way?
 
     device = get_device()
     set_random_seed(config["seed"])
     
-    exp = Experiment(config=config, device=device)
+    exp = Experiment(config=config, exp_name=exp_name, device=device)
 
     # training (note @timer decorator on train(), adds runtime to output)
     train_metrics, train_time = exp.train()
@@ -56,6 +58,9 @@ def main():
         DQN_SIMPLEGRID_STABLE_LOW_LR,
         DQN_SIMPLEGRID_LONG_EXPLORATION,
         DQN_SIMPLEGRID_BASELINE,
+        A2C_SIMPLEGRID_BASELINE,
+        A2C_SIMPLEGRID_LOW_ENTROPY,
+        A2C_KEYDOORBALL_BASELINE,
     ]        
 
     for exp in experiments:

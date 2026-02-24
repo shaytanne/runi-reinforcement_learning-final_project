@@ -4,15 +4,16 @@ import time
 import torch
 from typing import Dict
 
-from src.agent import BaseAgent, DQNAgent, RandomAgent
+from src.agent import DQNAgent, A2CAgent
 from src.constants import EPISODE_WINDOW_SIZE
-from src.template import BaseMiniGridEnv, SimpleGridEnv, KeyDoorBallEnv, pre_process
+from src.template import SimpleGridEnv, KeyDoorBallEnv, pre_process
 from src.utils import ExperimentLogger, MetricsHandler, VideoRecorder, timer
 
 
 class Experiment:
-    def __init__(self, config: Dict, device: torch.device):
+    def __init__(self, config: Dict, device: torch.device, exp_name: str = ""):
         self.config = config
+        self.exp_name = exp_name
         self.device = device
         self.training_episodes = config.get("training_episodes", 1000)
         self.inference_episodes = config.get("inference_episodes", 100)
@@ -26,7 +27,7 @@ class Experiment:
         self.env.reward_shaping = config.get("reward_shaping")
         
         # init agent
-        agent_class = self._get_agent_class()
+        agent_class = self._determine_agent_class()
         self.agent = agent_class(
             config=config, 
             obs_shape=config["obs_shape"], 
@@ -36,7 +37,9 @@ class Experiment:
 
         # experiment results folder
         exp_timestamp = time.strftime('%Y%m%d-%H%M%S')
-        self.results_dir = os.path.join("results", f"{config['algo']}_{exp_timestamp}")
+        exp_name = self.exp_name if self.exp_name else config['algo']
+        folder_name = f"{exp_name}_{exp_timestamp}"
+        self.results_dir = os.path.join("results", folder_name)
 
         # logger + video recorder
         self.logger = ExperimentLogger(save_dir=self.results_dir)
@@ -155,9 +158,11 @@ class Experiment:
         else:
             raise ValueError(f"Unknown Environment: {env_name}")
 
-    def _get_agent_class(self):
+    def _determine_agent_class(self):
         algo_name = self.config.get("algo")
-        if "DQN" in algo_name: # todo: change to exct name?
+        if algo_name == "DQN": # todo: change to exct name?
             return DQNAgent
+        if algo_name == "A2C":
+            return A2CAgent
         else:
             raise ValueError(f"Unknown Agent Algo: {algo_name}")

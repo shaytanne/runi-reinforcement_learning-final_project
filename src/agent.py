@@ -270,11 +270,11 @@ class A2CAgent(BaseAgent):
         # hyperparams
         self.gamma          = config.get('gamma', 0.99)
         self.learning_rate  = config.get('learning_rate', 1e-4)
-        self.value_loss_coefficient = config.get('value_loss_coef', 0.5)
-        self.entropy_coefficient   = config.get('entropy_coef', 0.01)
+        self.value_loss_coefficient = config.get('value_loss_coefficient', 0.5)
+        self.entropy_coefficient   = config.get('entropy_coefficient', 0.01)
         self.max_grad_norm  = config.get('max_grad_norm', 0.5)
 
-        # epsilon = 0.0 always (A2C stochastic by policy, not epsilon-greedy)
+        # exploitation only (A2C stochastic by policy, not epsilon-greedy)
         self.epsilon = 0.0  # attribute kept to adhere to interface
 
         # step counter
