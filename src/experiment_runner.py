@@ -3,7 +3,7 @@ import time
 import torch
 from typing import Dict
 
-from src.agent import DQNAgent, A2CAgent
+from src.agent import DQNAgent, A2CAgent, PPOAgent
 from src.constants import EPISODE_WINDOW_SIZE
 from src.template import SimpleGridEnv, KeyDoorBallEnv, pre_process
 from src.utils import ExperimentLogger, MetricsHandler, VideoRecorder, timer
@@ -97,14 +97,22 @@ class Experiment:
 
                 # select action
                 action = self.agent.choose_action(obs)
+                if isinstance(action, tuple):   # handle PPO choose_action output
+                    action, log_prob = action
+
+                # env step
                 next_obs, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
                 
-                # agent step(?)
+                # todo: base this condition on agent type?
+                # agent step
                 if update_per_step:
+                    # DQN: store transition, update, epsilon decay every step
                     self.agent.step(obs=obs, action=action, reward=reward, next_obs=next_obs, done=done)
                 else:
-                    trajectories.append((obs, action, reward, next_obs, float(done)))
+                    # A2C/PPO: store episode trajectory, update at episode end 
+                    # note: log_prob used by PPO, ignored by A2C
+                    trajectories.append((obs, action, reward, next_obs, float(done), log_prob))
 
                 # updates:
                 episode_rewards += reward
@@ -163,6 +171,10 @@ class Experiment:
                 
                 # take greedy action (no exploration)
                 action = self.agent.choose_action(obs=obs, epsilon=0.0)
+                if isinstance(action, tuple):   # handle PPO choose_action output
+                    action = action[0]
+
+                # env step
                 obs, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
                 
@@ -193,9 +205,11 @@ class Experiment:
 
     def _determine_agent_class(self):
         algo_name = self.config.get("algo")
-        if algo_name == "DQN": # todo: change to exct name?
+        if algo_name == "DQN":
             return DQNAgent
         elif algo_name == "A2C":
             return A2CAgent
+        elif algo_name == "PPO":
+            return PPOAgent
         else:
             raise ValueError(f"Unknown Agent Algo: {algo_name}")

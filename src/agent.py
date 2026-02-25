@@ -324,6 +324,7 @@ class A2CAgent(BaseAgent):
         if len(trajectories) == 0:
             return {}
 
+        trajectories = [t[:5] for t in trajectories]    # handle 6th field (PPO interface) # todo
         states, actions, rewards, next_states, dones = zip(*trajectories)
 
         # states: uint8 (N, H, W, C) -> float32 (N, C, H, W), normalized
