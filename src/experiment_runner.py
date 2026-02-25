@@ -56,6 +56,7 @@ class Experiment:
         """
         print(f"Starting training: {self.agent.name} agent on environment {self.config['env_name']}")
 
+        update_per_step = self.config.get("use_per_step_update", True)
         metrics_handler = MetricsHandler(num_episodes=self.training_episodes, window_size=EPISODE_WINDOW_SIZE)   
 
         for episode in range(1, self.training_episodes + 1):
@@ -64,6 +65,7 @@ class Experiment:
             done = False
             episode_rewards = 0
             episode_steps = 0
+            trajectories = []  # for episode-level updates (A2C)
 
             # todo: record at trianing end as well (last episode)?
             record_episode_video = (episode == self.training_episodes // 2)
@@ -74,19 +76,25 @@ class Experiment:
                 # capture video frame
                 if record_episode_video: self.video_recorder.capture()
 
-                # take epsilon-greedy  action
+                # select action
                 action = self.agent.choose_action(obs)
                 next_obs, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
                 
-                # agent step
-                self.agent.step(obs=obs, action=action, reward=reward, next_obs=next_obs, done=done)
-                
+                # agent step(?)
+                if update_per_step:
+                    self.agent.step(obs=obs, action=action, reward=reward, next_obs=next_obs, done=done)
+                else:
+                    trajectories.append((obs, action, reward, next_obs, float(done)))
+
                 # updates:
                 episode_rewards += reward
                 episode_steps += 1
                 obs = next_obs
             
+            if not update_per_step:
+                self.agent.update(trajectories)
+
             # save recorded video
             if record_episode_video:
                 self.video_recorder.stop()

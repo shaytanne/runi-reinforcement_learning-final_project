@@ -110,12 +110,13 @@ class MetricsHandler:
             "train_window_avg_steps": self.avg_steps
         }
 
-    def print_training_status(self, episode: int, epsilon: float) -> None:
+    def print_training_status(self, episode: int, epsilon: float | None = None) -> None:
         print(f"\rEpisode {episode}/{self.num_episodes}", end="", flush=True)
-        if episode % self.window == 0:
+        if self.window and episode % self.window == 0:
+            epsilon_str = f"{epsilon:.3f}" if epsilon is not None else "n/a" # handle epsilon=None case
             print(f"\rEpisodes {episode-self.window}-{episode}/{self.num_episodes} | "
                   f"Avg R: {self.avg_reward:.2f} | Avg Steps: {self.avg_steps:.1f} | "
-                  f"Success Rate: {self.success_rate:.2f} | epsilon: {epsilon:.3f}")
+                  f"Success Rate: {self.success_rate:.2f} | ε: {epsilon_str}")
 
 
 # ##########
