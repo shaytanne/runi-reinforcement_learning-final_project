@@ -274,7 +274,7 @@ class A2CAgent(BaseAgent):
         self.entropy_coefficient   = config.get('entropy_coefficient', 0.01)
         self.max_grad_norm  = config.get('max_grad_norm', 0.5)
 
-        # exploitation only (A2C stochastic by policy, not epsilon-greedy)
+        # exploitation only (A2C stochastic not epsilon-greedy)
         self.epsilon = 0.0  # attribute kept to adhere to interface
 
         # step counter
@@ -297,11 +297,12 @@ class A2CAgent(BaseAgent):
         :return: action index
         """
         with torch.no_grad():
+            # ingest observation
             obs_tensor = torch.as_tensor(obs, device=self.device).float()   # uint8 -> float32
             obs_tensor = obs_tensor.div(255.0)                              # normalize to [0,1]
             obs_tensor = obs_tensor.permute(2, 0, 1).unsqueeze(0)           # (H, W, C) -> (1, C, H, W)
 
-
+            # get action probs from network
             action_logits, _ = self.network(obs_tensor)
             action_probs = F.softmax(action_logits, dim=-1)
 
@@ -316,7 +317,7 @@ class A2CAgent(BaseAgent):
         """
         Update actor + critic from full episode (or some freq)
 
-        :param trajectories: list trajectory data objects (obs, action, reward, next_obs, done)
+        :param trajectories: list of trajectory data objects (obs, action, reward, next_obs, done)
                           obs, next_obs are uint8 (H, W, C) ndarrays
         :return: update values object (actor_loss, critic_loss, entropy, total_loss, mean_advantage)
         """
@@ -333,7 +334,7 @@ class A2CAgent(BaseAgent):
         rewards     = torch.tensor(rewards, dtype=torch.float32, device=self.device)
         dones       = torch.tensor(dones,   dtype=torch.float32, device=self.device)
 
-        # forward pass thru shared network
+        # fwd pass thru shared network
         action_logits, state_vals = self.network(states)
         action_probs = F.softmax(action_logits, dim=-1)
         state_vals = state_vals.squeeze()
@@ -409,3 +410,176 @@ class A2CAgent(BaseAgent):
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.steps_done = checkpoint['steps_done']
         print(f"[A2C] Checkpoint loaded from {filepath} (step: {self.steps_done})")
+
+
+class PPOAgent(BaseAgent):
+    """
+    PPO (Proximal Policy Optimization) Agent
+
+    - collects one full episode, then trains on it for a few passes
+    - limits magnitude of individual policy updates, keeps training stable
+    - stores old log_probs to compare current policy to prev
+    - on-policy, discards episode after updating
+
+    Obs format: uint8 (H, W, C) → normalized + transposed internally
+    choose_action() returns tuple (action, log_prob)
+    """
+
+    def __init__(self, config: Dict, obs_shape: np.ndarray, num_actions: int, device: torch.device):
+        """
+        :param obs_shape:   (H, W, C) — e.g. (84, 84, 1)
+        """
+        super().__init__(config=config, obs_shape=obs_shape, num_actions=num_actions, device=device)
+
+        self.num_actions = num_actions
+        self.config = config
+        self.steps_done = 0
+
+        # hyperparams
+        self.gamma           = config.get('gamma', 0.99)
+        self.learning_rate   = config.get('learning_rate', 3e-4)
+        self.clip_eps        = config.get('clip_eps', 0.2)
+        self.gae_lambda      = config.get('gae_lambda', 0.95)
+        self.update_epochs   = config.get('update_epochs', 4)   # reuse trajectory N times
+        self.value_loss_coefficient = config.get('value_loss_coefficient', 0.5)
+        self.entropy_coefficient = config.get('entropy_coefficient', 0.01)
+        self.max_grad_norm   = config.get('max_grad_norm', 0.5)
+
+        # exploitation only (A2C stochastic not epsilon-greedy)
+        self.epsilon    = 0.0   # attribute kept to adhere to interface
+        
+        # shared Actor-Critic network
+        self.network   = ActorCriticNetwork(observation_shape=obs_shape, num_actions=num_actions).to(device)
+        self.optimizer = torch.optim.Adam(self.network.parameters(), lr=self.learning_rate)
+
+    def choose_action(self, obs: np.ndarray, epsilon: float | None = None) -> Tuple[int, float]:
+        """
+        Sample action from current policy π(a|s) + return its log_prob
+
+        - log_prob stored in the trajectory, used later as old_log_prob in PPO clipped-ratio calculation
+        - when epsilon=0.0 (eval mode): greedy argmax, log_prob=0.0 (unused)
+
+        :param obs: uint8 ndarray (H, W, C)
+        :return: (action index, log-prob of the action)
+        """
+
+        with torch.no_grad():
+            # ingest observation
+            obs_tensor = torch.as_tensor(obs, device=self.device).float()   # uint8 -> float32
+            obs_tensor = obs_tensor.div(255.0)                              # normalize to [0,1]
+            obs_tensor = obs_tensor.permute(2, 0, 1).unsqueeze(0)           # (H,W,C) -> (1,C,H,W)
+
+            # get action probs from network
+            action_logits, _ = self.network(obs_tensor)
+            action_probs = F.softmax(action_logits, dim=-1)
+
+            if epsilon == 0.0:
+                # greedy eval - log_prob meaningless here, return 0.0
+                action = int(action_probs.argmax(dim=-1).item())
+                return action, 0.0 # todo: output n/a for probability?
+
+            # sample action, get its log_prob for PPO update
+            dist = torch.distributions.Categorical(action_probs)
+            action = dist.sample()
+            log_prob = dist.log_prob(action)
+            return int(action.item()), log_prob.item()
+
+    def update(self, trajectories: List[Tuple[np.ndarray, int, float, np.ndarray, bool, float]]) -> Dict:
+        """
+        PPO update: run <update_epochs> grad steps on the collected episode
+        Trajectory format: (obs, action, reward, next_obs, done, log_prob) - note extra log_prob field
+        
+        :param trajectories: list of trajectory data objects (obs, action, reward, next_obs, done, log_prob)
+                          obs, next_obs are uint8 (H, W, C) ndarrays
+        :return: dict with last epoch's loss components: policy_loss, value_loss, entropy, total_loss, mean_advantage
+        """
+        if len(trajectories) == 0:
+            return {}
+
+        states, actions, rewards, next_states, dones, old_log_probs = zip(*trajectories)
+
+        # uint8 (N,H,W,C) -> float32 (N,C,H,W), normalized
+        states      = torch.as_tensor(np.array(states),      device=self.device).float().div(255.0).permute(0, 3, 1, 2)
+        next_states = torch.as_tensor(np.array(next_states), device=self.device).float().div(255.0).permute(0, 3, 1, 2)
+        
+        actions       = torch.tensor(actions,       dtype=torch.long,    device=self.device)
+        rewards       = torch.tensor(rewards,       dtype=torch.float32, device=self.device)
+        dones         = torch.tensor(dones,         dtype=torch.float32, device=self.device)
+        old_log_probs = torch.tensor(old_log_probs, dtype=torch.float32, device=self.device)
+
+        # calculate TD targets once (fixed across all update epochs)
+        with torch.no_grad():
+            _, next_vals = self.network(next_states)
+            next_vals = next_vals.squeeze()
+        td_target = rewards + self.gamma * next_vals * (1 - dones)
+
+        last_epoch_losses = {}
+        for _ in range(self.update_epochs):
+            # fwd pass thru shared network
+            action_logits, state_vals = self.network(states)
+            state_vals   = state_vals.squeeze()
+            action_probs = F.softmax(action_logits, dim=-1)
+            dist = torch.distributions.Categorical(action_probs)
+
+            # advantage: action vs critic's baseline 
+            advantage = (td_target - state_vals).detach()
+
+            # surrogate objective (ratio clipped to [1-eps, 1+eps])
+            new_log_probs = dist.log_prob(actions)
+            ratio = torch.exp(new_log_probs - old_log_probs)
+            surr1 = ratio * advantage
+            surr2 = torch.clamp(ratio, (1 - self.clip_eps), (1 + self.clip_eps)) * advantage # clipping
+            
+            # losses
+            policy_loss = -torch.min(surr1, surr2).mean()
+            value_loss = F.mse_loss(state_vals, td_target.detach())
+
+            # combined loss with entropy bonus (for exploration)
+            entropy = dist.entropy().mean()
+            total_loss = (
+                policy_loss
+                + self.value_loss_coefficient * value_loss
+                - self.entropy_coefficient * entropy
+            )
+
+            # apply grads
+            self.optimizer.zero_grad()
+            total_loss.backward()
+            nn.utils.clip_grad_norm_(self.network.parameters(), self.max_grad_norm)
+            self.optimizer.step()
+
+            last_epoch_losses = {
+                'policy_loss':    policy_loss.item(),
+                'value_loss':     value_loss.item(),
+                'entropy':        entropy.item(),
+                'total_loss':     total_loss.item(),
+                'mean_advantage': advantage.mean().item(),
+            }
+
+        self.steps_done += 1
+        return last_epoch_losses
+
+    def save(self, path: str) -> None:
+        """
+        Save agent snapshot at checkpoint
+        - network state
+        - optimizer state
+        - step counter
+        - config
+        """
+        agent_dict = {
+            'network_state_dict':   self.network.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'steps_done':           self.steps_done,
+            'config':               self.config,
+        }
+        torch.save(agent_dict, path)
+        print(f"[PPO] Checkpoint saved to {path}")
+
+    def load(self, filepath: str) -> None:
+        """Load network + optimizer state from checkpoint"""
+        checkpoint = torch.load(filepath, map_location=self.device, weights_only=True)
+        self.network.load_state_dict(checkpoint['network_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.steps_done = checkpoint['steps_done']
+        print(f"[PPO] Checkpoint loaded from {filepath} (step: {self.steps_done})")
