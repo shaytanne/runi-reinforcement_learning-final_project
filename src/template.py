@@ -451,6 +451,29 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
             reward = 1.0
         else:
             reward = 0.0
+
+        # fetcth reward config if it exists
+        reward_config = getattr(self, "reward_shaping", {})
+        reward = 0.0
+
+        # key pickuop reward (before: no key, now: have key)
+        if not self.prev_key and self.is_carrying_key():
+            reward += reward_config.get("key", 0.5)
+
+        # door opened reward (before: had key + door closed, now: door open)
+        if self.prev_key and not self.prev_door and self.is_door_open():
+            reward += reward_config.get("door", 0.5)
+
+        # ball pickup reward (before: no ball, now: have ball)
+        if not self.prev_ball and self.is_carrying_ball():
+            reward += reward_config.get("ball", 0.5)
+
+        # goal reward
+        if terminated:
+            reward += reward_config.get("goal", 2.0)
+
+        # step penalty
+        reward -= reward_config.get("step", 0.001)
         # ----- REWARD SHAPING: EDIT ABOVE THIS LINE -----
 
         return self._get_obs(obs), reward, terminated, truncated, info
