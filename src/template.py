@@ -490,7 +490,7 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
         # redundant direction-change penalty
         if (self.prev_action is not None) and (self.prev_action in [0, 1]) and (action in [0, 1]):
             if action != self.prev_action:   # redundant turn in opposite direction
-                reward -= reward_config.get("turn_penalty", 0.01) # todo: add to config?
+                reward -= reward_config.get("turn_penalty", 0.01)
 
         # step penalty
         reward -= reward_config.get("step", 0.001)
