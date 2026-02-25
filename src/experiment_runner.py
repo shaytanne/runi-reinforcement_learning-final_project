@@ -97,6 +97,7 @@ class Experiment:
 
                 # select action
                 action = self.agent.choose_action(obs)
+                log_prob = 0.0  # dummy value for A2C, DQN
                 if isinstance(action, tuple):   # handle PPO choose_action output
                     action, log_prob = action
 
