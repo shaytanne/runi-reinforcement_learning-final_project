@@ -173,6 +173,76 @@ def plot_training_curves(log_dir: str, window: int = 50) -> None:
     plt.close()
 
 
+def plot_milestone_progress(log_dir: str, window: int = 50) -> None:
+    """
+    Plots cumulative milestone completion counts over training episodes
+    **KeyDoorBall experiments only (file won't exist for SimpleGrid)
+
+    Milestones tracked: 
+    - key pickup
+    - door open
+    - room crossing
+    - ball pickup
+    - goal reached
+    """
+    csv_path = os.path.join(log_dir, "milestone_log.csv")
+    if not os.path.exists(csv_path):
+        return  # skip for SimpleGrid exps
+
+    df = pd.read_csv(csv_path)
+
+    milestones = {
+        "got_key":      ("Key Pickup",     "tab:blue"),
+        "opened_door":  ("Door Opened",    "tab:orange"),
+        "has_crossed_door": ("Room Crossed", "tab:green"),
+        "got_ball":     ("Ball Pickup",    "tab:purple"),
+        "success":      ("Goal Reached",   "tab:red"),
+    }
+
+    # merge with training_log to get success col
+    training_csv = os.path.join(log_dir, "training_log.csv")
+    if os.path.exists(training_csv):
+        train_df = pd.read_csv(training_csv)[["episode", "success"]]
+        df = df.merge(train_df, on="episode", how="left")
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 5))
+
+    # left plot: cumulative counts
+    for col, (label, color) in milestones.items():
+        if col not in df.columns:
+            continue
+        cumsum = pd.to_numeric(df[col], errors="coerce").fillna(0).cumsum()
+        ax1.plot(df["episode"], cumsum, label=label, color=color, linewidth=2)
+
+    ax1.set_title("Cumulative Milestone Completions")
+    ax1.set_xlabel("Episode")
+    ax1.set_ylabel("Cumulative Count")
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+
+    # right plot: rolling success rate per milestone (conditional progress)
+    for col, (label, color) in milestones.items():
+        if col not in df.columns:
+            continue
+        series = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        if len(df) > window:
+            series = series.rolling(window).mean()
+        ax2.plot(df["episode"], series, label=label, color=color, linewidth=2)
+
+    ax2.set_title(f"Milestone Rate (Rolling {window} eps)")
+    ax2.set_xlabel("Episode")
+    ax2.set_ylabel("Rate")
+    ax2.set_ylim(0, 1.1)
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    save_path = os.path.join(log_dir, "milestone_progress.png")
+    plt.savefig(save_path)
+    plt.close()
+    print(f"Milestone plot saved to: {save_path}")
+
+
 def plot_comparison(run_directories: Dict, window: int = 50, save_dir: str = "results") -> None:
     """
     Plots multiple runs to compare algorithms    

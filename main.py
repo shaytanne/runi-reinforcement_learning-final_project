@@ -13,7 +13,7 @@ from src.experiments import (
     A2C_KEYDOORBALL_BASELINE
 )
 from src.experiment_runner import Experiment
-from src.utils import analyze_inference, plot_training_curves, save_experiment_report, set_random_seed, get_device
+from src.utils import analyze_inference, plot_training_curves, save_experiment_report, set_random_seed, get_device, plot_milestone_progress
 
 
 def run_single_experiment(config: Dict, exp_name: str) -> None:
@@ -28,6 +28,7 @@ def run_single_experiment(config: Dict, exp_name: str) -> None:
     # training (note @timer decorator on train(), adds runtime to output)
     train_metrics, train_time = exp.train()
     plot_training_curves(log_dir=exp.results_dir)
+    plot_milestone_progress(log_dir=exp.results_dir)
 
     # inference (note @timer decorator on evaluate(), adds runtime to output)
     inference_metrics, inference_time = exp.evaluate()

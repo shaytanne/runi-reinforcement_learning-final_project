@@ -1,4 +1,3 @@
-import csv
 import os
 import time
 import torch
@@ -8,6 +7,26 @@ from src.agent import DQNAgent, A2CAgent
 from src.constants import EPISODE_WINDOW_SIZE
 from src.template import SimpleGridEnv, KeyDoorBallEnv, pre_process
 from src.utils import ExperimentLogger, MetricsHandler, VideoRecorder, timer
+
+
+# --- helpers ---
+def _get_milestones(env: SimpleGridEnv | KeyDoorBallEnv) -> Dict:
+    """
+    Reads per-episode milestone flags from KeyDoorBallEnv
+    :return: milestone dict for envs that track milestones (e.g. KeyDoorBall), otherwise empty dict (e.g. SimpleGrid)
+    """
+    if not hasattr(env, "prev_key"):
+        return {}
+    
+    milestones = {attr: int(getattr(env, attr)) for attr in ["has_crossed_door",]
+        if hasattr(env, attr)
+    }
+    milestones |= {
+        "got_key":    int(getattr(env, "prev_key",  False)),
+        "opened_door": int(getattr(env, "prev_door", False)),
+        "got_ball":   int(getattr(env, "prev_ball", False)),
+    }
+    return milestones
 
 
 class Experiment:
@@ -100,6 +119,9 @@ class Experiment:
                 self.video_recorder.stop()
                 print(f"Mid-training video saved to {self.video_recorder.filename}")
             
+            # collect milestone state (KeyDoorBall only, no-op for SimpleGrid)
+            milestones = _get_milestones(self.env)
+
             # log + print episode metrics
             is_success = terminated
             metrics_handler.update(reward=episode_rewards, steps=episode_steps, success=is_success)
@@ -107,6 +129,9 @@ class Experiment:
             self.logger.log(filename="training_log", 
                             episode=episode, reward=episode_rewards, steps=episode_steps, epsilon=self.agent.epsilon, success=is_success)
         
+            if milestones:
+                self.logger.log(filename="milestone_log", episode=episode, **milestones)
+
         # training metrics for whole experiment
         return metrics_handler.get_training_metrics(epsilon=self.agent.epsilon)
 
