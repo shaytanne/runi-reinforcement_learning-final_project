@@ -76,7 +76,7 @@ class ActorCriticNetwork(nn.Module):
         with torch.no_grad():
             dummy_input = torch.zeros(1, num_channels, height, width)
             conv_output = self.conv(dummy_input)
-            flat_size = conv_output.view(1, -1).size(1)
+            flat_size = conv_output.reshape(1, -1).size(1)
 
         # shared FC layer
         self.fc_shared = nn.Linear(flat_size, 512)
@@ -96,7 +96,7 @@ class ActorCriticNetwork(nn.Module):
         """
         # shared feature extraction
         x = self.conv(x)
-        x = x.view(x.size(0), -1)  # flatten
+        x = x.reshape(x.size(0), -1)  # flatten
         x = F.relu(self.fc_shared(x))
         
         # todo: logits

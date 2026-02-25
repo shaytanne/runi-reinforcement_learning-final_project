@@ -170,7 +170,7 @@ class Experiment:
         algo_name = self.config.get("algo")
         if algo_name == "DQN": # todo: change to exct name?
             return DQNAgent
-        if algo_name == "A2C":
+        elif algo_name == "A2C":
             return A2CAgent
         else:
             raise ValueError(f"Unknown Agent Algo: {algo_name}")

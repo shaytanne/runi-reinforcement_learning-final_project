@@ -43,7 +43,7 @@ def timer(func):
     :returns: (function output, time delta)
     """
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args, **kwargs) -> Tuple[object, float]:
         # sync CPU & GPU if using cuda
         if torch.cuda.is_available():
             torch.cuda.synchronize()
