@@ -114,12 +114,39 @@ A2C_SIMPLEGRID_LOW_ENTROPY = {
 }
 A2C_SIMPLEGRID_LOW_ENTROPY["config"]["entropy_coefficient"] = 0.01
 
+
+# =====================================================================
+#                          DQN on KeyDoorBall
+# =====================================================================
+# 7. DQN baseline on KeyDoorBall
+DQN_KEYDOORBALL_BASELINE = {
+    "name": "7_DQN_KeyDoorBall",
+    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+}
+DQN_KEYDOORBALL_BASELINE["config"].update({
+    "env_name": "KeyDoorBall",
+    "max_steps": 500,
+    "training_episodes": 5000,
+    "inference_episodes": 10,
+    "reward_shaping": {
+        "key":           0.5,
+        "door":          0.5,
+        "room_crossing": 1.0,
+        "ball":          0.5,
+        "goal":          2.0,
+        "turn_penalty":  0.1,
+        "step":          0.001,
+    }
+})
+
+
 # =====================================================================
 #                          A2C on KeyDoorBall
 # =====================================================================
-# A2C baseline on KeyDoorBall: longer episodes, more training
+
+# 8. A2C baseline on KeyDoorBall: longer episodes, more training
 A2C_KEYDOORBALL_BASELINE = {
-    "name": "7_A2C_KeyDoorBall",
+    "name": "8_A2C_KeyDoorBall",
     "config": copy.deepcopy(A2C_BASE_CONFIG),
 }
 A2C_KEYDOORBALL_BASELINE["config"].update({
@@ -127,4 +154,13 @@ A2C_KEYDOORBALL_BASELINE["config"].update({
     "max_steps": 500,
     "training_episodes": 5000,
     "inference_episodes": 10,
+    "reward_shaping": {
+        "key":          0.5,
+        "door":         0.5,
+        "room_crossing": 1.0,
+        "ball":         0.5,
+        "goal":         2.0,
+        "turn_penalty": 0.1,
+        "step":         0.001,
+    },
 })

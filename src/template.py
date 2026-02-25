@@ -328,6 +328,12 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
         self.prev_door = False
         self.prev_ball = False
 
+        # --- STUDENT ADDITION ---:
+        # additional event tracking
+        self.prev_action = None
+        self.prev_pos = None
+        self.has_crossed_door = False
+
     # ╔═════════════════════════════════════════════════════════════════════════╗
     # ║  ⛔ DO NOT MODIFY: Core environment methods below                       ║
     # ╚═════════════════════════════════════════════════════════════════════════╝
@@ -347,6 +353,12 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
         self.prev_door = False
         self.prev_ball = False
         self.inventory = []
+
+        # --- STUDENT ADDITION ---:
+        # additional event tracking
+        self.prev_action = None
+        self.prev_pos = None
+        self.has_crossed_door = False
 
         # Call parent reset, which internally calls _gen_grid()
         obs, info = super().reset(seed=seed, options=options)
@@ -447,10 +459,6 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
         terminated = terminated and (not self.require_ball_pickup or self.is_carrying_ball())
 
         # ----- REWARD SHAPING: EDIT BELOW THIS LINE -----
-        if terminated:
-            reward = 1.0
-        else:
-            reward = 0.0
 
         # fetcth reward config if it exists
         reward_config = getattr(self, "reward_shaping", {})
@@ -464,6 +472,13 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
         if self.prev_key and not self.prev_door and self.is_door_open():
             reward += reward_config.get("door", 0.5)
 
+        # room-crossing reward
+        current_in_right_room = self.agent_pos[0] > self.partition_col
+        prev_in_right_room = (self.prev_pos[0] > self.partition_col) if self.prev_pos is not None else False
+        if (not prev_in_right_room) and (current_in_right_room) and (not self.has_crossed_door):
+            reward += reward_config.get("room_crossing", 1.0)
+            self.has_crossed_door = True
+
         # ball pickup reward (before: no ball, now: have ball)
         if not self.prev_ball and self.is_carrying_ball():
             reward += reward_config.get("ball", 0.5)
@@ -472,8 +487,18 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
         if terminated:
             reward += reward_config.get("goal", 2.0)
 
+        # redundant direction-change penalty
+        if (self.prev_action is not None) and (self.prev_action in [0, 1]) and (action in [0, 1]):
+            if action != self.prev_action:   # redundant turn in opposite direction
+                reward -= reward_config.get("turn_penalty", 0.01) # todo: add to config?
+
         # step penalty
         reward -= reward_config.get("step", 0.001)
+
+        # store current info for event tracking in next step
+        self.prev_action = action
+        self.prev_pos = tuple(self.agent_pos)
+
         # ----- REWARD SHAPING: EDIT ABOVE THIS LINE -----
 
         return self._get_obs(obs), reward, terminated, truncated, info
