@@ -15,6 +15,8 @@ from src.experiments import (
     A2C_SIMPLEGRID_BASELINE,
     DQN_KEYDOORBALL_BASELINE,
     A2C_KEYDOORBALL_BASELINE,
+    PPO_SIMPLEGRID_BASELINE,
+    PPO_KEYDOORBALL_BASELINE,
 )
 from src.experiment_runner import Experiment
 from src.utils import get_device
@@ -175,3 +177,81 @@ def test_smoke_7_a2c_deterministic_eval():
 
     actions = [agent.choose_action(obs, epsilon=0.0) for _ in range(10)]
     assert len(set(actions)) == 1, f"A2C greedy not deterministic: got {set(actions)}"
+
+# --- PPO ---
+
+def test_smoke_8_ppo_simplegrid():
+    """8 — PPO on SimpleGrid: full pipeline runs w/o crash"""
+    train_metrics, inference_metrics = run_smoke_test(PPO_SIMPLEGRID_BASELINE["config"], "ppo_simplegrid")
+    assert "train_episodes" in train_metrics
+    assert "inference_success_rate" in inference_metrics
+
+
+def test_smoke_9_ppo_keydoorball():
+    """9 — PPO on KeyDoorBall: full pipeline + reward shaping runs w/o crash"""
+    train_metrics, inference_metrics = run_smoke_test(PPO_KEYDOORBALL_BASELINE["config"], "ppo_keydoorball")
+    assert "train_episodes" in train_metrics
+    assert "inference_success_rate" in inference_metrics
+
+
+def test_smoke_10_ppo_checkpoint_roundtrip():
+    """10 — PPO checkpoint saves and loads correctly"""
+    from src.agent import PPOAgent
+
+    config = create_smoke_config(PPO_SIMPLEGRID_BASELINE["config"])
+    device = get_device()
+    obs_shape = config["obs_shape"]
+    num_actions = 3  # SimpleGrid
+
+    agent = PPOAgent(config=config, obs_shape=obs_shape, num_actions=num_actions, device=device)
+    agent.steps_done = 55
+
+    path = os.path.join(SMOKE_RESULTS_DIR, "test_ppo_checkpoint.pt")
+    os.makedirs(SMOKE_RESULTS_DIR, exist_ok=True)
+    agent.save(path)
+    assert os.path.exists(path), "PPO checkpoint file not created"
+
+    agent2 = PPOAgent(config=config, obs_shape=obs_shape, num_actions=num_actions, device=device)
+    agent2.load(path)
+    assert agent2.steps_done == 55, f"steps_done mismatch: {agent2.steps_done}"
+
+
+def test_smoke_11_ppo_returns_log_prob():
+    """11 — PPO choose_action returns (action, log_prob) tuple during training"""
+    import numpy as np
+    from src.agent import PPOAgent
+
+    config = create_smoke_config(PPO_SIMPLEGRID_BASELINE["config"])
+    device = get_device()
+    obs_shape = config["obs_shape"]
+    num_actions = 3
+
+    agent = PPOAgent(config=config, obs_shape=obs_shape, num_actions=num_actions, device=device)
+    obs = np.zeros(obs_shape, dtype=np.uint8)
+
+    result = agent.choose_action(obs)  # training mode — no epsilon arg
+    assert isinstance(result, tuple), f"Expected tuple, got {type(result)}"
+    action, log_prob = result
+    assert isinstance(action, int), f"Expected int action, got {type(action)}"
+    assert isinstance(log_prob, float), f"Expected float log_prob, got {type(log_prob)}"
+    assert 0 <= action < num_actions
+
+
+def test_smoke_12_ppo_deterministic_eval():
+    """12 — PPO choose_action with epsilon=0.0 is deterministic and returns int"""
+    import numpy as np
+    from src.agent import PPOAgent
+
+    config = create_smoke_config(PPO_SIMPLEGRID_BASELINE["config"])
+    device = get_device()
+    obs_shape = config["obs_shape"]
+    num_actions = 3
+
+    agent = PPOAgent(config=config, obs_shape=obs_shape, num_actions=num_actions, device=device)
+    obs = np.zeros(obs_shape, dtype=np.uint8)
+    obs[10, 10, 0] = 128
+
+    results = [agent.choose_action(obs, epsilon=0.0) for _ in range(10)]
+    # each result is (action, 0.0) tuple
+    actions = [r[0] for r in results]
+    assert len(set(actions)) == 1, f"PPO greedy not deterministic: got {set(actions)}"
