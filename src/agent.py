@@ -9,7 +9,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from src.buffer import ReplayBuffer
-from src.experiments import PROJECT_BASE_CONFIG
 from src.model import ActorCriticNetwork, MiniGridCNN
 
 
@@ -90,20 +89,19 @@ class DQNAgent(BaseAgent):
         super().__init__(config=config, obs_shape=obs_shape, num_actions=num_actions, device=device)
         self.num_actions = num_actions
 
-        self.config = PROJECT_BASE_CONFIG.copy()
-        if config:
-            self.config.update(config)
+        self.config = config
         
         # hyperparams
-        self.gamma: float = self.config.get("gamma")
-        self.epsilon: float = self.config.get("epsilon_start")
-        self.epsilon_min: float = self.config.get("epsilon_min")
-        self.epsilon_decay: float = self.config.get("epsilon_decay")
-        self.learning_rate: float = self.config.get("learning_rate")
-        self.batch_size: int = self.config.get("batch_size")
-        self.min_buffer_size: int = self.config.get("min_buffer_size")
-        self.training_freq: int = self.config.get("training_freq")
-        self.target_update_freq: int = self.config.get("target_update_freq")
+        self.gamma: float = self.config.get("gamma", 0.99)
+        self.epsilon: float = self.config.get("epsilon_start", 1.0)
+        self.epsilon_min: float = self.config.get("epsilon_min", 0.05)
+        self.epsilon_decay: float = self.config.get("epsilon_decay", 0.995)
+        self.learning_rate: float = self.config.get("learning_rate", 2.5e-4)
+        self.batch_size: int = self.config.get("batch_size", 32)
+        self.min_buffer_size: int = self.config.get("min_buffer_size", 1000)
+        self.training_freq: int = self.config.get("training_freq", 4)
+        self.target_update_freq: int = self.config.get("target_update_freq", 1000)
+        buffer_capacity = self.config.get("buffer_capacity", 100_000)
 
         # init networks:
         # policy net (main trained network)
@@ -120,7 +118,6 @@ class DQNAgent(BaseAgent):
         # self.loss_fn = nn.SmoothL1Loss()
 
         # memory (replay buffer)
-        buffer_capacity = self.config.get("buffer_capacity") # default to 100,000
         self.memory = ReplayBuffer(capacity=buffer_capacity, obs_shape=obs_shape, device=device)
         
         # init step counter
@@ -269,9 +266,9 @@ class A2CAgent(BaseAgent):
 
         # hyperparams
         self.gamma          = config.get('gamma', 0.99)
-        self.learning_rate  = config.get('learning_rate', 1e-4)
+        self.learning_rate  = config.get('learning_rate', 3e-4)
         self.value_loss_coefficient = config.get('value_loss_coefficient', 0.5)
-        self.entropy_coefficient   = config.get('entropy_coefficient', 0.01)
+        self.entropy_coefficient   = config.get('entropy_coefficient', 0.1)
         self.max_grad_norm  = config.get('max_grad_norm', 0.5)
 
         # exploitation only (A2C stochastic not epsilon-greedy)

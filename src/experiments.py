@@ -398,6 +398,56 @@ SET2_DQN_KDB["config"].update({
 
 
 # =====================================================================
+#                       SET 3
+# =====================================================================
+SET3_MAX_STEPS = 150
+SET3_EPISODES = 3000
+SET3_INFERENCE_EPISODES = 50
+
+# PPO on KDB
+SET3_PPO_KDB = {
+    "name": "SET3_PPO_KDB",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+SET3_PPO_KDB["config"].update({
+    "env_name": "KeyDoorBall",
+    "training_episodes": SET3_EPISODES,
+    "inference_episodes": SET3_INFERENCE_EPISODES,
+    "max_steps": SET3_MAX_STEPS,
+    "epsilon_decay":        0.999,
+    "training_freq":    10,        # train (backprop) every N(=10) steps
+    "reward_shaping": {
+        "key": 0.5, "door": 0.9, "room_crossing": 1.2,
+        "ball": 1.5, "goal": 2.0, "turn_penalty": 0.0, "step": 0.001,
+    },
+})
+
+# DQN on KDB
+SET3_DQN_KDB = {
+    "name": "SET3_DQN_KDB",
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
+}
+SET3_DQN_KDB["config"].update({
+    "env_name": "KeyDoorBall",
+    "training_episodes": SET3_EPISODES,
+    "inference_episodes": SET3_INFERENCE_EPISODES,
+    "max_steps": SET3_MAX_STEPS,
+    "epsilon_decay":        0.999,
+    "training_freq":    10,        # train (backprop) every N(=10) steps
+    "reward_shaping": {
+        "key": 0.5, "door": 0.9, "room_crossing": 1.2,
+        "ball": 1.5, "goal": 2.0, "turn_penalty": 0.0, "step": 0.001,
+    },
+    
+})
+
+exp_set_3 = [
+    SET3_DQN_KDB,
+    SET3_PPO_KDB, 
+]
+
+
+# =====================================================================
 #                       EXPERIMENT SETS
 # =====================================================================
 calibration_experiments = [
