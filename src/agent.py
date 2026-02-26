@@ -103,6 +103,11 @@ class DQNAgent(BaseAgent):
         self.target_update_freq: int = self.config.get("target_update_freq", 1000)
         buffer_capacity = self.config.get("buffer_capacity", 100_000)
 
+        # linear epsilon decay
+        training_episodes = self.config.get("training_episodes", 1000)
+        max_steps = self.config.get("max_steps", 200)
+        self.epsilon_step: float = (1 - self.epsilon_min) / (0.8 * training_episodes * max_steps) # todo: add 0.8 to config
+
         # init networks:
         # policy net (main trained network)
         self.policy_net = MiniGridCNN(observation_shape=obs_shape, num_actions=num_actions).to(device)
@@ -171,7 +176,8 @@ class DQNAgent(BaseAgent):
             
         # decay epsilon
         if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+            # self.epsilon *= self.epsilon_decay
+            self.epsilon = max(self.epsilon_min, self.epsilon - self.epsilon_step)
 
     def update(self):
         """
