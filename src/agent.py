@@ -119,7 +119,7 @@ class DQNAgent(BaseAgent):
 
         # optimizer + loss # todo: consider other optimizer/loss options?
         self.optimizer = optim.Adam(params=self.policy_net.parameters(), lr=self.learning_rate) 
-        self.loss_fn = nn.MSELoss()
+        self.loss_fn = nn.SmoothL1Loss()
         # self.loss_fn = nn.SmoothL1Loss()
 
         # memory (replay buffer)
@@ -190,13 +190,15 @@ class DQNAgent(BaseAgent):
         all_q_vals = self.policy_net(state_batch)                       # trigger POLICY net forward, get Q vals
         current_q_vals = all_q_vals.gather(dim=1, index=action_batch)   # filter Q vals for specific action(s) taken 
         
-        # calculate Q_target ( max Q(s', a') , from target net):
+        # calculate Q_target (DOUBLE DQN logic):
         with torch.no_grad():
-            #  
-            all_next_q_vals = self.target_net(next_state_batch)   # trigger TARGET net forward, get next Q vals
-            next_q_vals = all_next_q_vals.max(1)[0].unsqueeze(1)  # filter next Q vals for specific action(s) taken 
+            # select best action for the next state - use policy net
+            best_next_actions = self.policy_net(next_state_batch).argmax(dim=1, keepdim=True)
             
-            # Bellman eq: R + gamma * max(Q(s')) * (1 - done)
+            # evaluate Q-value of selected action - use target net
+            next_q_vals = self.target_net(next_state_batch).gather(dim=1, index=best_next_actions)
+            
+            # Bellman: R + gamma * Q(s', argmax Q(s')) * (1 - done)
             target_q_vals = reward_batch + (self.gamma * next_q_vals * (1 - done_batch))
             
         # calculate loss
@@ -206,8 +208,6 @@ class DQNAgent(BaseAgent):
         self.optimizer.zero_grad()
         loss.backward()
 
-        # todo: necessary?
-        # optional: gradient clipping for stability
         torch.nn.utils.clip_grad_norm_(
             parameters=self.policy_net.parameters(), 
             max_norm=1.0
@@ -240,7 +240,7 @@ class DQNAgent(BaseAgent):
         Load agent state from a checkpoint file.
         Restores networks, optimizer, step counter, and epsilon so training can resume exactly.
         """
-        checkpoint = torch.load(filepath, map_location=self.device, weights_only=True)
+        checkpoint = torch.load(filepath, map_location=self.device)
         self.policy_net.load_state_dict(checkpoint['policy_net_state_dict'])
         self.target_net.load_state_dict(checkpoint['target_net_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

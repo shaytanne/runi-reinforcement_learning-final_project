@@ -10,21 +10,21 @@ from src.utils import ExperimentLogger, MetricsHandler, VideoRecorder, timer
 
 
 # --- helpers ---
-def _get_milestones(env: SimpleGridEnv | KeyDoorBallEnv) -> Dict:
+def _get_milestones(env: KeyDoorBallEnv) -> Dict:
     """
     Reads per-episode milestone flags from KeyDoorBallEnv
     :return: milestone dict for envs that track milestones (e.g. KeyDoorBall), otherwise empty dict (e.g. SimpleGrid)
     """
-    if not hasattr(env, "prev_key"):
+    if env.__class__.__name__ != "KeyDoorBallEnv":
         return {}
     
     milestones = {attr: int(getattr(env, attr)) for attr in ["has_crossed_door",]
         if hasattr(env, attr)
     }
     milestones |= {
-        "got_key":    int(getattr(env, "prev_key",  False)),
-        "opened_door": int(getattr(env, "prev_door", False)),
-        "got_ball":   int(getattr(env, "prev_ball", False)),
+        "got_key":    int(env.is_carrying_key()),
+        "opened_door": int(env.is_door_open()),
+        "got_ball":   int(env.is_carrying_ball()),
     }
     return milestones
 

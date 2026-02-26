@@ -11,6 +11,7 @@ from src.utils import analyze_inference, plot_training_curves, save_experiment_r
 def run_single_experiment(config: Dict, exp_name: str, device: torch.device) -> None:
     """Runs one full experiment according to config"""
     print(f"--- Starting Experiment: {exp_name} ---")
+    print(config)
 
     set_random_seed(config["seed"])
     

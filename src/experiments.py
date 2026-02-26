@@ -5,7 +5,7 @@ import time
 COMMON_BASE_CONFIG = {
     # environment
     "env_name":             "SimpleGrid",
-    "obs_shape":            (84, 84, 1),
+    "obs_shape":            (84, 84, 3),
     "max_steps":            200,
     "seed":                 int(time.time()),
 
@@ -38,9 +38,9 @@ DQN_BASE_CONFIG.update({
     "epsilon_decay":        0.995,
 
     # replay buffer
-    "batch_size":           128,
+    "batch_size":           256,
     "buffer_capacity":      100_000,
-    "min_buffer_size":      1000,
+    "min_buffer_size":      5000,
 
     # update schedule
     "training_freq":        4,
@@ -122,7 +122,7 @@ exp_set_2 = [
 # =====================================================================
 #                       SET 3
 # =====================================================================
-SET3_MAX_STEPS = 250
+SET3_MAX_STEPS = 450
 SET3_EPISODES = 3000
 SET3_INFERENCE_EPISODES = 50
 
@@ -173,11 +173,12 @@ SET3_DQN_KDB_LINEAR_EPSILON["config"].update({
     "training_episodes": SET3_EPISODES,
     "inference_episodes": SET3_INFERENCE_EPISODES,
     "max_steps": SET3_MAX_STEPS,
-    "epsilon_decay":        0.999,
+    "min_epsilon": 0.1,
+    # "epsilon_decay":        0.999,
     "training_freq":    4,        # train (backprop) every N(=10) steps
     "reward_shaping": {
-        "key": 5.0, "door": 10.0, "room_crossing": 10.0,
-        "ball": 10.0, "goal": 40.0, "turn_penalty": 0.01, "step": 0.001,
+        "key": 1.0, "door": 1.0, "room_crossing": 1.0,
+        "ball": 1.5, "goal": 2.0, "turn_penalty": 0.0, "step": 0.001,
     },
     
 })
@@ -186,3 +187,23 @@ exp_set_3 = [
     SET3_DQN_KDB,
     SET3_PPO_KDB, 
 ]
+
+
+# =====================================================================
+#                   Smoke test configs
+# =====================================================================
+DQN_SIMPLEGRID_BASELINE = {"name": "smoke_DQN_SimpleGrid", "config": copy.deepcopy(DQN_BASE_CONFIG)}
+A2C_SIMPLEGRID_BASELINE = {"name": "smoke_A2C_SimpleGrid", "config": copy.deepcopy(A2C_BASE_CONFIG)}
+PPO_SIMPLEGRID_BASELINE = {"name": "smoke_PPO_SimpleGrid", "config": copy.deepcopy(PPO_BASE_CONFIG)}
+
+_KDB_DQN = copy.deepcopy(DQN_BASE_CONFIG)
+_KDB_DQN.update({"env_name": "KeyDoorBall", "max_steps": 450})
+DQN_KEYDOORBALL_BASELINE = {"name": "smoke_DQN_KDB", "config": _KDB_DQN}
+
+_KDB_A2C = copy.deepcopy(A2C_BASE_CONFIG)
+_KDB_A2C.update({"env_name": "KeyDoorBall", "max_steps": 450})
+A2C_KEYDOORBALL_BASELINE = {"name": "smoke_A2C_KDB", "config": _KDB_A2C}
+
+_KDB_PPO = copy.deepcopy(PPO_BASE_CONFIG)
+_KDB_PPO.update({"env_name": "KeyDoorBall", "max_steps": 450})
+PPO_KEYDOORBALL_BASELINE = {"name": "smoke_PPO_KDB", "config": _KDB_PPO}

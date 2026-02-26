@@ -13,9 +13,9 @@ from src.agent import DQNAgent, A2CAgent
 from src.experiments import (
     DQN_SIMPLEGRID_BASELINE,
     A2C_SIMPLEGRID_BASELINE,
+    PPO_SIMPLEGRID_BASELINE,
     DQN_KEYDOORBALL_BASELINE,
     A2C_KEYDOORBALL_BASELINE,
-    PPO_SIMPLEGRID_BASELINE,
     PPO_KEYDOORBALL_BASELINE,
 )
 from src.experiment_runner import Experiment
