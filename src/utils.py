@@ -5,7 +5,7 @@ import random
 import time
 from collections import deque
 from functools import wraps
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import imageio
 import numpy as np
@@ -122,6 +122,16 @@ class MetricsHandler:
 # ##########
 # UTILS FOR RECORDING RESULTS (PLOTTING, REPORTS)
 # ##########
+
+def save_fig(fig: plt.Figure, save_dir: str, filename: str) -> None:
+    """Saves matplotlib figure to save_dir/filename, creates dir if needed"""
+    os.makedirs(save_dir, exist_ok=True)
+    path = os.path.join(save_dir, filename)
+    fig.savefig(path)
+    plt.close(fig)
+    print(f"Saved: {path}")
+
+
 def plot_training_curves(log_dir: str, window: int = 50) -> None:
     """
     Generates single-run convergence graphs with smoothing
@@ -172,6 +182,70 @@ def plot_training_curves(log_dir: str, window: int = 50) -> None:
     plt.savefig(save_path)
     plt.close()
 
+def plot_action_distribution(log_dir: str, window: int = 50) -> None:
+    """
+    Plots action distribution over training episodes.
+    2 subplots:
+      - Left:  smoothed action counts per episode
+      - Right: proportional action share over time (normalised by episode steps)
+
+    Reads action_N columns from action_dist_training.csv.
+    Compatible with both SimpleGrid (3 actions) and KeyDoorBall (5 actions).
+    """
+    csv_path = os.path.join(log_dir, "action_dist_training.csv")
+    if not os.path.exists(csv_path):
+        return
+    df = pd.read_csv(csv_path)
+
+    action_cols = sorted([c for c in df.columns if c.startswith("action_")])
+    if not action_cols:
+        print("No action columns found in action_dist_training.csv — add action logging to experiment_runner.py")
+        return
+
+    action_labels = {
+        "action_0": "Turn Left",
+        "action_1": "Turn Right",
+        "action_2": "Forward",
+        "action_3": "Pickup",
+        "action_4": "Toggle",
+    }
+    colors = ["tab:blue", "tab:orange", "tab:green", "tab:purple", "tab:red"]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 5))
+
+    # left: smoothed counts
+    for i, col in enumerate(action_cols):
+        series = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        if len(df) > window:
+            series = series.rolling(window).mean()
+        ax1.plot(df["episode"], series, label=action_labels.get(col, col),
+                 color=colors[i % len(colors)], linewidth=2)
+    ax1.set_title(f"Action Counts per Episode (Rolling {window})")
+    ax1.set_xlabel("Episode")
+    ax1.set_ylabel("Count")
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+
+    # right: proportional share
+    totals = df[action_cols].sum(axis=1).replace(0, 1)  # avoid div/0
+    for i, col in enumerate(action_cols):
+        proportion = pd.to_numeric(df[col], errors="coerce").fillna(0) / totals
+        if len(df) > window:
+            proportion = proportion.rolling(window).mean()
+        ax2.plot(df["episode"], proportion, label=action_labels.get(col, col),
+                 color=colors[i % len(colors)], linewidth=2)
+    ax2.set_title(f"Action Proportion over Training (Rolling {window})")
+    ax2.set_xlabel("Episode")
+    ax2.set_ylabel("Proportion of Steps")
+    ax2.set_ylim(0, 1)
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    save_path = os.path.join(log_dir, "action_distribution.png")
+    plt.savefig(save_path)
+    plt.close()
+    print(f"Action distribution saved to: {save_path}")
 
 def plot_milestone_progress(log_dir: str, window: int = 50) -> None:
     """

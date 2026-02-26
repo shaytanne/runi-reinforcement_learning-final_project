@@ -332,6 +332,7 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
         # additional event tracking
         self.prev_action = None
         self.prev_pos = None
+        self.has_opened_door = False
         self.has_crossed_door = False
 
     # ╔═════════════════════════════════════════════════════════════════════════╗
@@ -358,6 +359,7 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
         # additional event tracking
         self.prev_action = None
         self.prev_pos = None
+        self.has_opened_door = False
         self.has_crossed_door = False
 
         # Call parent reset, which internally calls _gen_grid()
@@ -469,8 +471,9 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
             reward += reward_config.get("key", 0.5)
 
         # door opened reward (before: had key + door closed, now: door open)
-        if self.prev_key and not self.prev_door and self.is_door_open():
+        if (self.prev_key) and (not self.prev_door) and (self.is_door_open()) and (not self.has_opened_door):
             reward += reward_config.get("door", 0.5)
+            self.has_opened_door = True
 
         # room-crossing reward
         current_in_right_room = self.agent_pos[0] > self.partition_col

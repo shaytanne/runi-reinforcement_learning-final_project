@@ -85,6 +85,7 @@ class Experiment:
             episode_rewards = 0
             episode_steps = 0
             trajectories = []  # for episode-level updates (A2C)
+            episode_action_counts = {} # debug
 
             # todo: record at trianing end as well (last episode)?
             record_episode_video = (episode == self.training_episodes // 2)
@@ -100,6 +101,9 @@ class Experiment:
                 log_prob = 0.0  # dummy value for A2C, DQN
                 if isinstance(action, tuple):   # handle PPO choose_action output
                     action, log_prob = action
+
+                # monitor action distribution
+                episode_action_counts[action] = episode_action_counts.get(action, 0) + 1    # debug
 
                 # env step
                 next_obs, reward, terminated, truncated, _ = self.env.step(action)
@@ -137,7 +141,11 @@ class Experiment:
             metrics_handler.print_training_status(episode=episode, epsilon=self.agent.epsilon)
             self.logger.log(filename="training_log", 
                             episode=episode, reward=episode_rewards, steps=episode_steps, epsilon=self.agent.epsilon, success=is_success)
-        
+            
+            # log action distribution (debug)
+            action_dist = {f"action_{a}": episode_action_counts.get(a, 0) for a in range(self.env.action_space.n)}
+            self.logger.log(filename="action_dist_training", episode=episode, **action_dist)
+
             if milestones:
                 self.logger.log(filename="milestone_log", episode=episode, **milestones)
         
