@@ -113,7 +113,7 @@ class Experiment:
                 # agent step
                 if update_per_step:
                     # DQN: store transition, update, epsilon decay every step
-                    self.agent.step(obs=obs, action=action, reward=reward, next_obs=next_obs, done=done)
+                    self.agent.step(obs=obs, action=action, reward=reward, next_obs=next_obs, done=terminated)
                 else:
                     # A2C/PPO: store episode trajectory, update at episode end 
                     # note: log_prob used by PPO, ignored by A2C

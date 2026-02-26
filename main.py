@@ -48,7 +48,7 @@ def main():
     device = get_device()
 
     # define exp set:
-    experiments = [SET3_DQN_KDB]
+    experiments = [SET3_DQN_KDB_LINEAR_EPSILON]
     for exp in experiments:
         run_single_experiment(exp["config"], exp["name"], device=device)
 

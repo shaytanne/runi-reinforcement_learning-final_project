@@ -94,6 +94,7 @@ if __name__ == "__main__":
         os.path.join(SRC_DIR, "experiments.py"),
         os.path.join(SRC_DIR, "template.py"),
         os.path.join(SRC_DIR, "utils.py"),
+        os.path.join(SRC_DIR, "experiment_comparison.py"),
         os.path.join(SRC_DIR, "buffer.py"),
         os.path.join(SRC_DIR, "model.py"),
         os.path.join(SRC_DIR, "agent.py"),
