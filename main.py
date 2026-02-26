@@ -1,16 +1,17 @@
 from datetime import timedelta
 from typing import Dict
 
+import torch
+
 from src.experiments import calibration_experiments, exp_set_1
 from src.experiment_runner import Experiment
 from src.utils import analyze_inference, plot_training_curves, save_experiment_report, set_random_seed, get_device, plot_milestone_progress
 
 
-def run_single_experiment(config: Dict, exp_name: str) -> None:
+def run_single_experiment(config: Dict, exp_name: str, device: torch.device) -> None:
     """Runs one full experiment according to config"""
     print(f"--- Starting Experiment: {exp_name} ---")
 
-    device = get_device()
     set_random_seed(config["seed"])
     
     exp = Experiment(config=config, exp_name=exp_name, device=device)
@@ -43,10 +44,13 @@ def run_single_experiment(config: Dict, exp_name: str) -> None:
 
 
 def main():
+
+    device = get_device()
+
     # define exp set:
     experiments = calibration_experiments
     for exp in experiments:
-        run_single_experiment(exp["config"], exp["name"])
+        run_single_experiment(exp["config"], exp["name"], device=device)
 
 
 if __name__ == "__main__":
