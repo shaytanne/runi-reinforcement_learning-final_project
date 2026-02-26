@@ -2,94 +2,76 @@ import copy
 import time
 
 
-# standard/fallback exp config, basis for all agents/envs/setups
-PROJECT_BASE_CONFIG = {
-    # run settings (env, algorithm, setup)
-    "env_name": "SimpleGrid",
-    "algo": "DQN",              # which agent
-    "obs_shape": (84, 84, 1),
-    "seed": int(time.time()),   # random seed
-    "max_steps": 200,           # per episode
-    "training_episodes": 1000,
-    "inference_episodes": 20,
-    
-    # hyperparameters
-    "gamma": 0.99,              # discount factor
-    "learning_rate": 2.5e-4,    # learning rate 
-    "epsilon_start": 1.0,       # initial epsilon
-    "epsilon_min": 0.05,        # minimum epsilon
-    "epsilon_decay": 0.995,     # epsilon decay rate
-    "batch_size": 128,           # batch size
-    "buffer_capacity": 100000,  # replay buffer capacity
-    "min_buffer_size": 1000,    # minimum buffer size before training
-    "training_freq": 4,         # train (backprop) every N(=4) steps
-    "target_update_freq": 1000, # sync target network every N(=1000) steps
-    "grad_clip": 1.0,           # gradient clipping value for DQN
+COMMON_BASE_CONFIG = {
+    # environment
+    "env_name":             "SimpleGrid",
+    "obs_shape":            (84, 84, 1),
+    "max_steps":            200,
+    "seed":                 int(time.time()),
 
-    # A2C/PPO hyperparameters (ignored by DQN)
-    "value_loss_coefficient": 0.5,     # weight of critic loss in total loss
-    "entropy_coefficient": 0.01,       # weight of entropy bonus (encourages exploration)
-    "max_grad_norm": 0.5,              # grad clipping for A2C/PPO
-    "use_per_step_update": True,       # True = DQN (step-level)  False = A2C/PPO (episode-level)
+    # training loop
+    "training_episodes":    1000,
+    "inference_episodes":   20,
 
-    # PPO-specific (ignored by DQN/A2C)
-    "clip_eps": 0.2,
-    "gae_lambda": 0.95, # todo
-    "update_epochs": 4,
-    
+    # shared hyperparameters
+    "gamma":                0.99,
+
     # reward shaping
     "reward_shaping": {
         "step": 0.0,
-        "goal": 1.0
-    }
+        "goal": 1.0,
+    },
 }
 
-# A2C base config (override DQN-specific fields, keep shared ones)
-A2C_BASE_CONFIG = copy.deepcopy(PROJECT_BASE_CONFIG)
+DQN_BASE_CONFIG = copy.deepcopy(COMMON_BASE_CONFIG)
+DQN_BASE_CONFIG.update({
+    "algo":                 "DQN",
+    "use_per_step_update":  True,
+
+    # network + optimizer
+    "learning_rate":        2.5e-4,
+    "grad_clip":            1.0,
+
+    # exploration
+    "epsilon_start":        1.0,
+    "epsilon_min":          0.05,
+    "epsilon_decay":        0.995,
+
+    # replay buffer
+    "batch_size":           32,
+    "buffer_capacity":      100_000,
+    "min_buffer_size":      1000,
+
+    # update schedule
+    "training_freq":        4,
+    "target_update_freq":   1000,
+})
+
+A2C_BASE_CONFIG = copy.deepcopy(COMMON_BASE_CONFIG)
 A2C_BASE_CONFIG.update({
-    "algo": "A2C",
-    "use_per_step_update": False,   # update per episode not step
+    "algo":                     "A2C",
+    "use_per_step_update":      False,
 
-    # hyperparams adjusted for A2C 
-    "learning_rate": 3e-4,  # higher LR than DQN
-    "gamma": 0.99,
-    "value_loss_coefficient": 0.5,
-    "entropy_coefficient": 0.1,
-    "max_grad_norm": 0.5,
+    # network + optimizer
+    "learning_rate":            3e-4,
+    "max_grad_norm":            0.5,
 
-    # disable fields unused by A2C
-    "epsilon_start": None,
-    "epsilon_min": None,
-    "epsilon_decay": None,
-    "batch_size": None,
-    "buffer_capacity": None,
-    "min_buffer_size": None,
-    "training_freq": None,
-    "target_update_freq": None,
+    # loss coefficients
+    "value_loss_coefficient":   0.5,
+    "entropy_coefficient":      0.1,
 })
 
-PPO_BASE_CONFIG = copy.deepcopy(PROJECT_BASE_CONFIG)
+PPO_BASE_CONFIG = copy.deepcopy(A2C_BASE_CONFIG)   # ← inherits from A2C, not SHARED
 PPO_BASE_CONFIG.update({
-    "algo": "PPO",
-    "use_per_step_update": False,   # episode-level update (same as A2C)
-    "learning_rate": 3e-4,
-    "value_loss_coefficient": 0.5,
-    "entropy_coefficient": 0.01,
-    "max_grad_norm": 0.5,
-    "clip_eps": 0.2,
-    "gae_lambda": 0.95,
-    "update_epochs": 4,
+    "algo":                     "PPO",
 
-    # disable DQN-only fields
-    "epsilon_start": None,
-    "epsilon_min": None,
-    "epsilon_decay": None,
-    "batch_size": None,
-    "buffer_capacity": None,
-    "min_buffer_size": None,
-    "training_freq": None,
-    "target_update_freq": None,
+    # PPO-specific
+    "entropy_coefficient":      0.01,   # PPO uses lower entropy than A2C
+    "clip_eps":                 0.2,
+    "gae_lambda":               0.95,
+    "update_epochs":            4,
 })
+
 
 # =====================================================================
 #                          DQN on SimpleGrid
@@ -98,20 +80,20 @@ PPO_BASE_CONFIG.update({
 # 1. baseline
 DQN_SIMPLEGRID_BASELINE = {
     "name": "1_Baseline",
-    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
 }
 
 # 2. reward shaoing: step penalty
 DQN_SIMPLEGRID_STEP_PENALTY = {
     "name": "2_Step_Penalty",
-    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
 }
 DQN_SIMPLEGRID_STEP_PENALTY["config"]["reward_shaping"] = {"step": 0.01, "goal": 1.0}
 
 # 3. stability focus: low LR, slower target updates
 DQN_SIMPLEGRID_STABLE_LOW_LR = {
     "name": "3_Stable_LowLR",
-    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
 }
 DQN_SIMPLEGRID_STABLE_LOW_LR["config"]["learning_rate"] = 1e-4
 DQN_SIMPLEGRID_STABLE_LOW_LR["config"]["target_update_freq"] = 2000
@@ -119,7 +101,7 @@ DQN_SIMPLEGRID_STABLE_LOW_LR["config"]["target_update_freq"] = 2000
 # 4. long exploration (epsilon: slow decay, lower min)
 DQN_SIMPLEGRID_LONG_EXPLORATION = {
     "name": "4_Long_Exploration",
-    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
 }
 DQN_SIMPLEGRID_LONG_EXPLORATION["config"]["epsilon_decay"] = 0.999
 DQN_SIMPLEGRID_LONG_EXPLORATION["config"]["epsilon_min"] = 0.1
@@ -161,7 +143,7 @@ PPO_SIMPLEGRID_BASELINE = {
 # 8. DQN baseline on KeyDoorBall
 DQN_KEYDOORBALL_BASELINE = {
     "name": "8_DQN_KeyDoorBall",
-    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
 }
 DQN_KEYDOORBALL_BASELINE["config"].update({
     "env_name": "KeyDoorBall",
@@ -248,7 +230,7 @@ CALIB_MAX_STEPS_KDB = 500
 
 CALIB_A1_DQN_SIMPLEGRID = {
     "name": "CA1_DQN_SimpleGrid",
-    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
 }
 CALIB_A1_DQN_SIMPLEGRID["config"].update({
     "training_episodes": CALIB_EPISODES_SG,
@@ -280,7 +262,7 @@ CALIB_A3_PPO_SIMPLEGRID["config"].update({
 # B1: DQN, full reward shaping
 CALIB_B1_DQN_KDB_SHAPED = {
     "name": "CB1_DQN_KDB_Shaped",
-    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
 }
 CALIB_B1_DQN_KDB_SHAPED["config"].update({
     "env_name": "KeyDoorBall",
@@ -296,7 +278,7 @@ CALIB_B1_DQN_KDB_SHAPED["config"].update({
 # B2: DQN, sparse reward only (goal + step penalty) - control condition (baseline for shaping)
 CALIB_B2_DQN_KDB_SPARSE = {
     "name": "CB2_DQN_KDB_Sparse",
-    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
 }
 CALIB_B2_DQN_KDB_SPARSE["config"].update({
     "env_name": "KeyDoorBall",
@@ -329,7 +311,7 @@ CALIB_B3_PPO_KDB_SHAPED["config"].update({
 # C1: DQN aggressive exploration (slow decay, high floor)
 CALIB_C1_DQN_HIGH_EXPLORE = {
     "name": "CC1_DQN_HighExplore",
-    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
 }
 CALIB_C1_DQN_HIGH_EXPLORE["config"].update({
     "training_episodes": CALIB_EPISODES_SG,
@@ -341,7 +323,7 @@ CALIB_C1_DQN_HIGH_EXPLORE["config"].update({
 # C2: DQN fast exploitation (faster decay, lower floor)
 CALIB_C2_DQN_LOW_EXPLORE = {
     "name": "CC2_DQN_LowExplore",
-    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
 }
 CALIB_C2_DQN_LOW_EXPLORE["config"].update({
     "training_episodes": CALIB_EPISODES_SG,
@@ -400,7 +382,7 @@ SET2_PPO_KDB["config"].update({
 # DQN on KDB
 SET2_DQN_KDB = {
     "name": "SET2_DQN_KDB",
-    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
 }
 SET2_DQN_KDB["config"].update({
     "env_name": "KeyDoorBall",
