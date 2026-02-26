@@ -140,6 +140,9 @@ class Experiment:
         
             if milestones:
                 self.logger.log(filename="milestone_log", episode=episode, **milestones)
+        
+        # save final model
+        self.agent.save(path=os.path.join(self.results_dir, "final_model.pt"))
 
         # training metrics for whole experiment
         return metrics_handler.get_training_metrics(epsilon=self.agent.epsilon)
