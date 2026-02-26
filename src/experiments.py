@@ -19,7 +19,7 @@ PROJECT_BASE_CONFIG = {
     "epsilon_start": 1.0,       # initial epsilon
     "epsilon_min": 0.05,        # minimum epsilon
     "epsilon_decay": 0.995,     # epsilon decay rate
-    "batch_size": 32,           # batch size
+    "batch_size": 128,           # batch size
     "buffer_capacity": 100000,  # replay buffer capacity
     "min_buffer_size": 1000,    # minimum buffer size before training
     "training_freq": 4,         # train (backprop) every N(=4) steps
@@ -374,6 +374,48 @@ CALIB_C4_PPO_LOW_ENTROPY["config"].update({
 
 
 # =====================================================================
+#                       SET 2
+# =====================================================================
+SET2_MAX_STEPS = 800
+SET2_EPISODES = 500
+SET2_INFERENCE_EPISODES = 50
+
+# PPO on KDB
+SET2_PPO_KDB = {
+    "name": "SET2_PPO_KDB",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+SET2_PPO_KDB["config"].update({
+    "env_name": "KeyDoorBall",
+    "training_episodes": SET2_EPISODES,
+    "inference_episodes": SET2_INFERENCE_EPISODES,
+    "max_steps": SET2_MAX_STEPS,
+    "reward_shaping": {
+        "key": 0.5, "door": 0.9, "room_crossing": 1.2,
+        "ball": 1.5, "goal": 2.0, "turn_penalty": 0.0, "step": 0.001,
+    },
+    "training_freq":    10,        # train (backprop) every N(=10) steps
+})
+
+# DQN on KDB
+SET2_DQN_KDB = {
+    "name": "SET2_DQN_KDB",
+    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+}
+SET2_DQN_KDB["config"].update({
+    "env_name": "KeyDoorBall",
+    "training_episodes": SET2_EPISODES,
+    "inference_episodes": SET2_INFERENCE_EPISODES,
+    "max_steps": SET2_MAX_STEPS,
+    "reward_shaping": {
+        "key": 0.5, "door": 0.9, "room_crossing": 1.2,
+        "ball": 1.5, "goal": 2.0, "turn_penalty": 0.0, "step": 0.001,
+    },
+    "training_freq":    10,        # train (backprop) every N(=10) steps
+})
+
+
+# =====================================================================
 #                       EXPERIMENT SETS
 # =====================================================================
 calibration_experiments = [
@@ -405,4 +447,9 @@ exp_set_1 = [
     DQN_KEYDOORBALL_BASELINE,
     A2C_KEYDOORBALL_BASELINE,
     PPO_KEYDOORBALL_BASELINE,
+]
+
+exp_set_2 = [
+    SET2_PPO_KDB,
+    SET2_DQN_KDB,
 ]
