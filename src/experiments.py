@@ -230,3 +230,179 @@ PPO_KEYDOORBALL_BASELINE["config"].update({
         "step":          0.001,
     },
 })
+
+
+# =====================================================================
+#           CALIBRATION EXPERIMENTS (300-500 episodes)
+#        Goal: identify promising directions before full training
+# =====================================================================
+
+CALIB_EPISODES_SG  = 300   # SimpleGrid calibration episodes
+CALIB_EPISODES_KDB = 500   # KeyDoorBall calibration episodes
+CALIB_INFERENCE    = 5     
+CALIB_MAX_STEPS_SG  = 200
+CALIB_MAX_STEPS_KDB = 500
+
+# --- GROUP A: Algorithm comparison on SimpleGrid ---
+# all algs, identical conditions - which family to invest in?
+
+CALIB_A1_DQN_SIMPLEGRID = {
+    "name": "CA1_DQN_SimpleGrid",
+    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+}
+CALIB_A1_DQN_SIMPLEGRID["config"].update({
+    "training_episodes": CALIB_EPISODES_SG,
+    "inference_episodes": CALIB_INFERENCE,
+})
+
+CALIB_A2_A2C_SIMPLEGRID = {
+    "name": "CA2_A2C_SimpleGrid",
+    "config": copy.deepcopy(A2C_BASE_CONFIG),
+}
+CALIB_A2_A2C_SIMPLEGRID["config"].update({
+    "training_episodes": CALIB_EPISODES_SG,
+    "inference_episodes": CALIB_INFERENCE,
+})
+
+CALIB_A3_PPO_SIMPLEGRID = {
+    "name": "CA3_PPO_SimpleGrid",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+CALIB_A3_PPO_SIMPLEGRID["config"].update({
+    "training_episodes": CALIB_EPISODES_SG,
+    "inference_episodes": CALIB_INFERENCE,
+})
+
+
+# --- GROUP B: Reward shaping on KeyDoorBall ---
+# same alg with/out shaping - do shaped rewards produce more milestone completions? (milestone logs)
+
+# B1: DQN, full reward shaping
+CALIB_B1_DQN_KDB_SHAPED = {
+    "name": "CB1_DQN_KDB_Shaped",
+    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+}
+CALIB_B1_DQN_KDB_SHAPED["config"].update({
+    "env_name": "KeyDoorBall",
+    "training_episodes": CALIB_EPISODES_KDB,
+    "inference_episodes": CALIB_INFERENCE,
+    "max_steps": CALIB_MAX_STEPS_KDB,
+    "reward_shaping": {
+        "key": 0.5, "door": 0.5, "room_crossing": 1.0,
+        "ball": 0.5, "goal": 2.0, "turn_penalty": 0.1, "step": 0.001,
+    },
+})
+
+# B2: DQN, sparse reward only (goal + step penalty) - control condition (baseline for shaping)
+CALIB_B2_DQN_KDB_SPARSE = {
+    "name": "CB2_DQN_KDB_Sparse",
+    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+}
+CALIB_B2_DQN_KDB_SPARSE["config"].update({
+    "env_name": "KeyDoorBall",
+    "training_episodes": CALIB_EPISODES_KDB,
+    "inference_episodes": CALIB_INFERENCE,
+    "max_steps": CALIB_MAX_STEPS_KDB,
+    "reward_shaping": {"goal": 2.0, "step": 0.001},
+})
+
+# B3: PPO, full reward shaping
+CALIB_B3_PPO_KDB_SHAPED = {
+    "name": "CB3_PPO_KDB_Shaped",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+CALIB_B3_PPO_KDB_SHAPED["config"].update({
+    "env_name": "KeyDoorBall",
+    "training_episodes": CALIB_EPISODES_KDB,
+    "inference_episodes": CALIB_INFERENCE,
+    "max_steps": CALIB_MAX_STEPS_KDB,
+    "reward_shaping": {
+        "key": 0.5, "door": 0.5, "room_crossing": 1.0,
+        "ball": 0.5, "goal": 2.0, "turn_penalty": 0.1, "step": 0.001,
+    },
+})
+
+
+# --- GROUP C: Exploration sensitivity ---
+# DQN epsilon schedule + A2C/PPO entropy coefficient effect on early learning
+
+# C1: DQN aggressive exploration (slow decay, high floor)
+CALIB_C1_DQN_HIGH_EXPLORE = {
+    "name": "CC1_DQN_HighExplore",
+    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+}
+CALIB_C1_DQN_HIGH_EXPLORE["config"].update({
+    "training_episodes": CALIB_EPISODES_SG,
+    "inference_episodes": CALIB_INFERENCE,
+    "epsilon_decay": 0.999,
+    "epsilon_min": 0.15,
+})
+
+# C2: DQN fast exploitation (faster decay, lower floor)
+CALIB_C2_DQN_LOW_EXPLORE = {
+    "name": "CC2_DQN_LowExplore",
+    "config": copy.deepcopy(PROJECT_BASE_CONFIG),
+}
+CALIB_C2_DQN_LOW_EXPLORE["config"].update({
+    "training_episodes": CALIB_EPISODES_SG,
+    "inference_episodes": CALIB_INFERENCE,
+    "epsilon_decay": 0.990,
+    "epsilon_min": 0.02,
+})
+
+# C3: PPO high entropy (strong exploration pressure)
+CALIB_C3_PPO_HIGH_ENTROPY = {
+    "name": "CC3_PPO_HighEntropy",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+CALIB_C3_PPO_HIGH_ENTROPY["config"].update({
+    "training_episodes": CALIB_EPISODES_SG,
+    "inference_episodes": CALIB_INFERENCE,
+    "entropy_coefficient": 0.1,
+})
+
+# C4: PPO low entropy (faster convergence to deterministic policy)
+CALIB_C4_PPO_LOW_ENTROPY = {
+    "name": "CC4_PPO_LowEntropy",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+CALIB_C4_PPO_LOW_ENTROPY["config"].update({
+    "training_episodes": CALIB_EPISODES_SG,
+    "inference_episodes": CALIB_INFERENCE,
+    "entropy_coefficient": 0.001,
+})
+
+
+# =====================================================================
+#                       EXPERIMENT SETS
+# =====================================================================
+calibration_experiments = [
+    CALIB_A1_DQN_SIMPLEGRID,
+    CALIB_A2_A2C_SIMPLEGRID,
+    CALIB_A3_PPO_SIMPLEGRID,
+
+    CALIB_C1_DQN_HIGH_EXPLORE,
+    CALIB_C2_DQN_LOW_EXPLORE,
+    CALIB_C3_PPO_HIGH_ENTROPY,
+    CALIB_C4_PPO_LOW_ENTROPY,
+
+    CALIB_B1_DQN_KDB_SHAPED,
+    CALIB_B2_DQN_KDB_SPARSE,
+    CALIB_B3_PPO_KDB_SHAPED,
+]
+
+exp_set_1 = [
+    # SimpleGrid
+    DQN_SIMPLEGRID_STEP_PENALTY,
+    DQN_SIMPLEGRID_STABLE_LOW_LR,
+    DQN_SIMPLEGRID_LONG_EXPLORATION,
+    DQN_SIMPLEGRID_BASELINE,
+    A2C_SIMPLEGRID_BASELINE,
+    A2C_SIMPLEGRID_LOW_ENTROPY,
+    PPO_SIMPLEGRID_BASELINE,
+
+    # KeyDoorBall
+    DQN_KEYDOORBALL_BASELINE,
+    A2C_KEYDOORBALL_BASELINE,
+    PPO_KEYDOORBALL_BASELINE,
+]

@@ -1,18 +1,7 @@
 from datetime import timedelta
 from typing import Dict
 
-from src.experiments import (
-    DQN_SIMPLEGRID_BASELINE, 
-    DQN_SIMPLEGRID_STEP_PENALTY, 
-    DQN_SIMPLEGRID_STABLE_LOW_LR, 
-    DQN_SIMPLEGRID_LONG_EXPLORATION, 
-    DQN_KEYDOORBALL_BASELINE, 
-    A2C_SIMPLEGRID_BASELINE, 
-    A2C_SIMPLEGRID_LOW_ENTROPY, 
-    A2C_KEYDOORBALL_BASELINE,
-    PPO_SIMPLEGRID_BASELINE, 
-    PPO_KEYDOORBALL_BASELINE,
-)
+from src.experiments import calibration_experiments, exp_set_1
 from src.experiment_runner import Experiment
 from src.utils import analyze_inference, plot_training_curves, save_experiment_report, set_random_seed, get_device, plot_milestone_progress
 
@@ -55,22 +44,7 @@ def run_single_experiment(config: Dict, exp_name: str) -> None:
 
 def main():
     # define exp set:
-    experiments = [
-        # SimpleGrid
-        DQN_SIMPLEGRID_STEP_PENALTY,
-        DQN_SIMPLEGRID_STABLE_LOW_LR,
-        DQN_SIMPLEGRID_LONG_EXPLORATION,
-        DQN_SIMPLEGRID_BASELINE,
-        A2C_SIMPLEGRID_BASELINE,
-        A2C_SIMPLEGRID_LOW_ENTROPY,
-        PPO_SIMPLEGRID_BASELINE,
-
-        # KeyDoorBall
-        DQN_KEYDOORBALL_BASELINE,
-        A2C_KEYDOORBALL_BASELINE,
-        PPO_KEYDOORBALL_BASELINE,
-    ]        
-
+    experiments = calibration_experiments
     for exp in experiments:
         run_single_experiment(exp["config"], exp["name"])
 
