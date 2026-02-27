@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from src.buffer import ReplayBuffer
+from src.buffer import ReplayBuffer, PrioritizedReplayBuffer
 from src.model import ActorCriticNetwork, MiniGridCNN
 
 
@@ -587,3 +587,150 @@ class PPOAgent(BaseAgent):
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.steps_done = checkpoint['steps_done']
         print(f"[PPO] Checkpoint loaded from {filepath} (step: {self.steps_done})")
+
+
+class DDQNPERAgent(BaseAgent):
+    """
+    Double DQN Agent with PER buffer
+    Diff from DQNAgent:
+    - uses PrioritizedReplayBuffer (not ReplayBuffer) - weighted sampling by TD error
+    - loss weighted by importance-sampling weights (handles non-uniform sampling bias)
+    - priorities updated after each training step
+    """
+
+    def __init__(self, config: Dict, obs_shape: np.ndarray, num_actions: int, device: torch.device):
+        super().__init__(config=config, obs_shape=obs_shape, num_actions=num_actions, device=device)
+        self.num_actions = num_actions
+        self.config = config
+
+        # hyperparams (same as DQN)
+        self.gamma: float = self.config.get("gamma", 0.99)
+        self.epsilon: float = self.config.get("epsilon_start", 1.0)
+        self.epsilon_min: float = self.config.get("epsilon_min", 0.05)
+        self.epsilon_decay: float = self.config.get("epsilon_decay", 0.995)
+        self.learning_rate: float = self.config.get("learning_rate", 2.5e-4)
+        self.batch_size: int = self.config.get("batch_size", 32)
+        self.min_buffer_size: int = self.config.get("min_buffer_size", 1000)
+        self.training_freq: int = self.config.get("training_freq", 4)
+        self.target_update_freq: int = self.config.get("target_update_freq", 1000)
+        buffer_capacity = self.config.get("buffer_capacity", 100_000)
+
+        # linear epsilon decay
+        training_episodes = self.config.get("training_episodes", 1000)
+        max_steps = self.config.get("max_steps", 200)
+        self.epsilon_step: float = (1 - self.epsilon_min) / (0.8 * training_episodes * max_steps)
+
+        # networks (identical to DQN)
+        self.policy_net = MiniGridCNN(observation_shape=obs_shape, num_actions=num_actions).to(device)
+        self.target_net = MiniGridCNN(observation_shape=obs_shape, num_actions=num_actions).to(device)
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.target_net.eval()
+
+        # optimizer
+        self.optimizer = optim.Adam(params=self.policy_net.parameters(), lr=self.learning_rate)
+
+        # PER buffer
+        self.memory = PrioritizedReplayBuffer(
+            capacity=buffer_capacity,
+            obs_shape=obs_shape,
+            device=device,
+            alpha=self.config.get("per_alpha", 0.6),
+            beta_start=self.config.get("per_beta_start", 0.4),
+            beta_frames=self.config.get("per_beta_frames", 100_000),
+            epsilon=self.config.get("per_epsilon", 1e-6),
+        )
+
+        self.steps_done = 0
+
+    def choose_action(self, obs: np.ndarray, epsilon: float | None = None) -> int:
+        """Epsilon-greedy action selection"""
+        if epsilon is None:
+            epsilon = self.epsilon
+
+        if random.random() < epsilon:
+            return random.randint(0, self.num_actions - 1)
+
+        with torch.no_grad():
+            state = torch.as_tensor(data=obs, device=self.device)
+            state = state.float().div(255.0)
+            state = state.permute(2, 0, 1).unsqueeze(0)
+
+            q_values = self.policy_net(state)
+            return q_values.argmax().item()
+
+    def step(self, obs: np.ndarray, action: int, reward: float, next_obs: np.ndarray, done: bool) -> None:
+        """Store transition, train, decay epsilon"""
+        self.steps_done += 1
+
+        self.memory.add(obs=obs, action=action, reward=reward, next_obs=next_obs, done=done)
+
+        if (len(self.memory) >= self.min_buffer_size) and (self.steps_done % self.training_freq == 0):
+            self.update()
+
+        if self.steps_done % self.target_update_freq == 0:
+            self.target_net.load_state_dict(self.policy_net.state_dict())
+
+        if self.epsilon > self.epsilon_min:
+            self.epsilon = max(self.epsilon_min, self.epsilon - self.epsilon_step)
+
+    def update(self):
+        """
+        DDQN + PER update logic
+        Key diff from DQNAgent:
+        1. sample() returns indices + IS weights
+        2. loss is element-wise, weighted by IS weights
+        3. priorities updated after backprop
+        """
+        # sample batch - PER has extra fields
+        state_batch, next_state_batch, action_batch, reward_batch, done_batch, \
+            indices, is_weights = self.memory.sample(self.batch_size)
+
+        # current Q values: Q(s, a)
+        all_q_vals = self.policy_net(state_batch)
+        current_q_vals = all_q_vals.gather(dim=1, index=action_batch)
+
+        # target Q values (DDQN logic - same as DQNAgent)
+        with torch.no_grad():
+            best_next_actions = self.policy_net(next_state_batch).argmax(dim=1, keepdim=True)
+            next_q_vals = self.target_net(next_state_batch).gather(dim=1, index=best_next_actions)
+            target_q_vals = reward_batch + (self.gamma * next_q_vals * (1 - done_batch))
+
+        # PER-weighted loss: element-wise TD error * importance-sampling weights
+        td_errors = current_q_vals - target_q_vals
+        loss = (is_weights * td_errors.pow(2)).mean()
+
+        # optimize
+        self.optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(
+            parameters=self.policy_net.parameters(),
+            max_norm=1.0
+        )
+        self.optimizer.step()
+
+        # update priorities in buffer
+        self.memory.update_priorities(
+            indices,
+            td_errors.detach().cpu().squeeze().numpy()
+        )
+
+    def save(self, path: str) -> None:
+        agent_dict = {
+            'policy_net_state_dict': self.policy_net.state_dict(),
+            'target_net_state_dict': self.target_net.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'steps_done': self.steps_done,
+            'epsilon': self.epsilon,
+            'config': self.config,
+        }
+        torch.save(agent_dict, path)
+        print(f"[DDQN-PER] Checkpoint saved to {path}")
+
+    def load(self, filepath: str) -> None:
+        checkpoint = torch.load(filepath, map_location=self.device)
+        self.policy_net.load_state_dict(checkpoint['policy_net_state_dict'])
+        self.target_net.load_state_dict(checkpoint['target_net_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.steps_done = checkpoint['steps_done']
+        self.epsilon    = checkpoint['epsilon']
+        print(f"[DDQN-PER] Checkpoint loaded from {filepath} (step: {self.steps_done}, ε: {self.epsilon:.4f})")

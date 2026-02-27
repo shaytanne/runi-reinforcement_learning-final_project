@@ -5,7 +5,7 @@ import time
 COMMON_BASE_CONFIG = {
     # environment
     "env_name":             "SimpleGrid",
-    "obs_shape":            (84, 84, 3),
+    "obs_shape":            (84, 84, 1),
     "max_steps":            200,
     "seed":                 int(time.time()),
 
@@ -39,7 +39,7 @@ DQN_BASE_CONFIG.update({
 
     # replay buffer
     "batch_size":           256,
-    "buffer_capacity":      100_000,
+    "buffer_capacity":      40_000,
     "min_buffer_size":      5000,
 
     # update schedule
@@ -173,7 +173,7 @@ SET3_DQN_KDB_LINEAR_EPSILON["config"].update({
     "training_episodes": SET3_EPISODES,
     "inference_episodes": SET3_INFERENCE_EPISODES,
     "max_steps": SET3_MAX_STEPS,
-    "min_epsilon": 0.1,
+    "epsilon_min": 0.1,
     # "epsilon_decay":        0.999,
     "training_freq":    4,        # train (backprop) every N(=10) steps
     "reward_shaping": {
@@ -187,6 +187,58 @@ exp_set_3 = [
     SET3_DQN_KDB,
     SET3_PPO_KDB, 
 ]
+
+
+# =====================================================================
+#   exp set 4 DDQN + PER 
+# =====================================================================
+DDQN_PER_BASE_CONFIG = copy.deepcopy(DQN_BASE_CONFIG)
+DDQN_PER_BASE_CONFIG.update({
+    "algo":                 "DDQN_PER",
+    "use_per_step_update":  True,
+
+    # PER hyperparameters
+    "per_alpha":            0.6,        # priority exponent (0=uniform, 1=full priority)
+    "per_beta_start":       0.4,        # init IS correction (decays to 1.0)
+    "per_beta_frames":      100_000,    # num steps to decay beta
+    "per_epsilon":          1e-6,       # prevent 0-priority
+})
+
+
+SET4_DDQN_PER_KDB = {
+    "name": "SET4_DDQN_PER_KDB",
+    "config": copy.deepcopy(DDQN_PER_BASE_CONFIG),
+}
+SET4_DDQN_PER_KDB["config"].update({
+    "env_name":             "KeyDoorBall",
+    "obs_shape":            (84, 84, 1), # grayscale
+    "training_episodes":    3000,
+    "inference_episodes":   50,
+    "max_steps":            450,
+
+    # buffer
+    "buffer_capacity":      120_000,
+    "min_buffer_size":      5000,
+    "batch_size":           256,
+
+    # exploration
+    "epsilon_min":          0.1, 
+
+    # update schedule
+    "training_freq":        4,
+    "target_update_freq":   500,
+
+    # PER params
+    "per_alpha":            0.6,
+    "per_beta_start":       0.4,
+    "per_beta_frames":      600_000,             # assumes 3000 eps x 450 steps x 0.44
+
+    # reward shaping
+    "reward_shaping": {
+        "key": 1.0, "door": 1.0, "room_crossing": 1.0,
+        "ball": 1.5, "goal": 2.0, "turn_penalty": 0.0, "step": 0.001,
+    },
+})
 
 
 # =====================================================================

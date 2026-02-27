@@ -3,7 +3,7 @@ import time
 import torch
 from typing import Dict
 
-from src.agent import DQNAgent, A2CAgent, PPOAgent
+from src.agent import DQNAgent, DDQNPERAgent, A2CAgent, PPOAgent
 from src.constants import EPISODE_WINDOW_SIZE
 from src.template import SimpleGridEnv, KeyDoorBallEnv, pre_process
 from src.utils import ExperimentLogger, MetricsHandler, VideoRecorder, timer
@@ -219,6 +219,8 @@ class Experiment:
         algo_name = self.config.get("algo")
         if algo_name == "DQN":
             return DQNAgent
+        elif algo_name == "DDQN_PER":
+            return DDQNPERAgent 
         elif algo_name == "A2C":
             return A2CAgent
         elif algo_name == "PPO":
