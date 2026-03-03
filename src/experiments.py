@@ -241,6 +241,29 @@ SET4_DDQN_PER_KDB["config"].update({
 })
 
 
+SET4_PPO_KDB = {
+    "name": "SET4_PPO_KDB",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+SET4_PPO_KDB["config"].update({
+    "env_name": "KeyDoorBall",
+    "obs_shape": (84, 84, 1),
+    "max_steps": 450,
+    "seed": 1772571932,
+    "training_episodes": 3000,
+    "inference_episodes": 50,
+    "reward_shaping": {
+        "key": 0.5,
+        "door": 1.0,
+        "room_crossing": 1.5,
+        "ball": 2.0,
+        "goal": 3.0,
+        "turn_penalty": 0.0,
+        "step": 0.001,
+    },
+})
+
+
 # =====================================================================
 #   SET 5: SimpleGrid — Algorithm Comparison (DQN vs A2C vs PPO)
 # =====================================================================

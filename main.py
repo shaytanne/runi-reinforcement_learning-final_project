@@ -49,7 +49,7 @@ def main():
     device = get_device()
 
     # define exp set:
-    experiments = exp_set_5
+    experiments = [SET4_PPO_KDB]
     for exp in experiments:
         run_single_experiment(exp["config"], exp["name"], device=device)
 
