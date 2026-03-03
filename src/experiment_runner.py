@@ -117,7 +117,7 @@ class Experiment:
                 else:
                     # A2C/PPO: store episode trajectory, update at episode end 
                     # note: log_prob used by PPO, ignored by A2C
-                    trajectories.append((obs, action, reward, next_obs, float(done), log_prob))
+                    trajectories.append((obs, action, reward, next_obs, float(terminated), log_prob))
 
                 # updates:
                 episode_rewards += reward

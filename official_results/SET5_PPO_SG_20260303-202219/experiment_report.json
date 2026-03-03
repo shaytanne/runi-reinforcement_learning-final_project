@@ -1,0 +1,48 @@
+{
+    "meta": {
+        "algo": "PPO",
+        "env": "SimpleGrid",
+        "timestamp": "20260303-214545"
+    },
+    "configuration": {
+        "env_name": "SimpleGrid",
+        "obs_shape": [
+            84,
+            84,
+            1
+        ],
+        "max_steps": 200,
+        "seed": 1772558983,
+        "training_episodes": 1000,
+        "inference_episodes": 50,
+        "gamma": 0.99,
+        "reward_shaping": {
+            "step": 0.005,
+            "goal": 1.0
+        },
+        "algo": "PPO",
+        "use_per_step_update": false,
+        "learning_rate": 0.0003,
+        "max_grad_norm": 0.5,
+        "value_loss_coefficient": 0.5,
+        "entropy_coefficient": 0.01,
+        "clip_eps": 0.2,
+        "gae_lambda": 0.95,
+        "update_epochs": 4
+    },
+    "performance": {
+        "train": "1:23:01",
+        "inference": "0:00:30"
+    },
+    "results": {
+        "train_episodes": 1000,
+        "train_final_epsilon": 0.0,
+        "train_window_success_rate": 0.68,
+        "train_window_avg_reward": 0.17729999999999968,
+        "train_window_avg_steps": 100.54,
+        "inference_episodes": 50,
+        "inference_success_rate": 0.36,
+        "inference_avg_reward": -0.30170000000000047,
+        "inference_avg_steps": 132.34
+    }
+}

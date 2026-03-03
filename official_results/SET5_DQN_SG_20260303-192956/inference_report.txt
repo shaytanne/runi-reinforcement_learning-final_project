@@ -1,0 +1,5 @@
+Inference Analysis (50 episodes):
+Success Rate: 100.00%
+Avg Reward:   0.9551
+Avg Steps:    8.98
+Std Dev Steps:2.71

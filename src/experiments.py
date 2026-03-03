@@ -226,7 +226,7 @@ SET4_DDQN_PER_KDB["config"].update({
 
     # update schedule
     "training_freq":        4,
-    "target_update_freq":   500,
+    "target_update_freq":   2000,
 
     # PER params
     "per_alpha":            0.6,
@@ -235,10 +235,70 @@ SET4_DDQN_PER_KDB["config"].update({
 
     # reward shaping
     "reward_shaping": {
-        "key": 1.0, "door": 1.0, "room_crossing": 1.0,
-        "ball": 1.5, "goal": 2.0, "turn_penalty": 0.0, "step": 0.001,
+        "key": 0.5, "door": 1.0, "room_crossing": 1.5,
+        "ball": 2.0, "goal": 3.0, "turn_penalty": 0.0, "step": 0.001,
     },
 })
+
+
+# =====================================================================
+#   SET 5: SimpleGrid — Algorithm Comparison (DQN vs A2C vs PPO)
+# =====================================================================
+SET5_MAX_STEPS = 200
+SET5_EPISODES = 1000
+SET5_INFERENCE_EPISODES = 50
+
+SET5_REWARD_SHAPING = {
+    "step": 0.005,   # light penalty to encourage efficiency
+    "goal": 1.0,
+}
+
+# DQN on SimpleGrid
+SET5_DQN_SG = {
+    "name": "SET5_DQN_SG",
+    "config": copy.deepcopy(DQN_BASE_CONFIG),
+}
+SET5_DQN_SG["config"].update({
+    "env_name":             "SimpleGrid",
+    "training_episodes":    SET5_EPISODES,
+    "inference_episodes":   SET5_INFERENCE_EPISODES,
+    "max_steps":            SET5_MAX_STEPS,
+    "epsilon_min":          0.05,
+    "target_update_freq":   1000,
+    "reward_shaping":       SET5_REWARD_SHAPING,
+})
+
+# A2C on SimpleGrid
+SET5_A2C_SG = {
+    "name": "SET5_A2C_SG",
+    "config": copy.deepcopy(A2C_BASE_CONFIG),
+}
+SET5_A2C_SG["config"].update({
+    "env_name":             "SimpleGrid",
+    "training_episodes":    SET5_EPISODES,
+    "inference_episodes":   SET5_INFERENCE_EPISODES,
+    "max_steps":            SET5_MAX_STEPS,
+    "reward_shaping":       SET5_REWARD_SHAPING,
+})
+
+# PPO on SimpleGrid
+SET5_PPO_SG = {
+    "name": "SET5_PPO_SG",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+SET5_PPO_SG["config"].update({
+    "env_name":             "SimpleGrid",
+    "training_episodes":    SET5_EPISODES,
+    "inference_episodes":   SET5_INFERENCE_EPISODES,
+    "max_steps":            SET5_MAX_STEPS,
+    "reward_shaping":       SET5_REWARD_SHAPING,
+})
+
+exp_set_5 = [
+    SET5_DQN_SG,
+    SET5_A2C_SG,
+    SET5_PPO_SG,
+]
 
 
 # =====================================================================

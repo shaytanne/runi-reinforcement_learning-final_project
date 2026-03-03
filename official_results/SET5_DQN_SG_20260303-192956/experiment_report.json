@@ -1,0 +1,51 @@
+{
+    "meta": {
+        "algo": "DQN",
+        "env": "SimpleGrid",
+        "timestamp": "20260303-195355"
+    },
+    "configuration": {
+        "env_name": "SimpleGrid",
+        "obs_shape": [
+            84,
+            84,
+            1
+        ],
+        "max_steps": 200,
+        "seed": 1772558983,
+        "training_episodes": 1000,
+        "inference_episodes": 50,
+        "gamma": 0.99,
+        "reward_shaping": {
+            "step": 0.005,
+            "goal": 1.0
+        },
+        "algo": "DQN",
+        "use_per_step_update": true,
+        "learning_rate": 0.00025,
+        "grad_clip": 1.0,
+        "epsilon_start": 1.0,
+        "epsilon_min": 0.05,
+        "epsilon_decay": 0.995,
+        "batch_size": 256,
+        "buffer_capacity": 40000,
+        "min_buffer_size": 5000,
+        "training_freq": 4,
+        "target_update_freq": 1000
+    },
+    "performance": {
+        "train": "0:23:49",
+        "inference": "0:00:05"
+    },
+    "results": {
+        "train_episodes": 1000,
+        "train_final_epsilon": 0.5502996875002072,
+        "train_window_success_rate": 1.0,
+        "train_window_avg_reward": 0.8826,
+        "train_window_avg_steps": 23.48,
+        "inference_episodes": 50,
+        "inference_success_rate": 1.0,
+        "inference_avg_reward": 0.9551,
+        "inference_avg_steps": 8.98
+    }
+}
