@@ -153,9 +153,7 @@ class DQNAgent(BaseAgent):
             self.target_net.load_state_dict(self.policy_net.state_dict())
             
         # decay epsilon
-        if self.epsilon > self.epsilon_min:
-            # self.epsilon *= self.epsilon_decay
-            self.epsilon = max(self.epsilon_min, self.epsilon - self.epsilon_step)
+        self.epsilon = max((self.epsilon * self.epsilon_decay), self.epsilon_min)
 
     def update(self):
         """
@@ -739,8 +737,8 @@ class DDQNPERAgent(BaseAgent):
         if self.steps_done % self.target_update_freq == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
-        if self.epsilon > self.epsilon_min:
-            self.epsilon = max(self.epsilon_min, self.epsilon - self.epsilon_step)
+        self.epsilon = max((self.epsilon * self.epsilon_decay), self.epsilon_min)
+
 
     def update(self):
         """

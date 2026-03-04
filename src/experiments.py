@@ -217,11 +217,12 @@ SET4_DDQN_PER_KDB["config"].update({
     "max_steps":            450,
 
     # buffer
-    "buffer_capacity":      120_000,
-    "min_buffer_size":      5000,
+    "buffer_capacity":      400_000,
+    "min_buffer_size":      20_000,
     "batch_size":           256,
 
     # exploration
+    "epsilon_decay":        0.9977, 
     "epsilon_min":          0.1, 
 
     # update schedule
@@ -258,7 +259,7 @@ SET4_PPO_KDB["config"].update({
         "door": 2.0,
         "room_crossing": 3,
         "ball": 4.0,
-        "goal": 5.0,
+        "goal": 12.0,
         "turn_penalty": 0.0,
         "step": 0.001,
     },

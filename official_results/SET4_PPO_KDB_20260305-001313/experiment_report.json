@@ -1,0 +1,54 @@
+{
+    "meta": {
+        "algo": "PPO",
+        "env": "KeyDoorBall",
+        "timestamp": "20260305-021105"
+    },
+    "configuration": {
+        "env_name": "KeyDoorBall",
+        "obs_shape": [
+            84,
+            84,
+            1
+        ],
+        "max_steps": 450,
+        "seed": 1772571932,
+        "training_episodes": 3000,
+        "inference_episodes": 50,
+        "gamma": 0.99,
+        "reward_shaping": {
+            "key": 1.0,
+            "door": 2.0,
+            "room_crossing": 3,
+            "ball": 4.0,
+            "goal": 12.0,
+            "turn_penalty": 0.0,
+            "step": 0.001
+        },
+        "algo": "PPO",
+        "use_per_step_update": false,
+        "learning_rate": 0.0003,
+        "max_grad_norm": 0.5,
+        "value_loss_coefficient": 0.5,
+        "entropy_coefficient": 0.01,
+        "clip_eps": 0.2,
+        "gae_lambda": 0.95,
+        "update_epochs": 4,
+        "minibatch_size": 64
+    },
+    "performance": {
+        "train": "1:56:28",
+        "inference": "0:01:20"
+    },
+    "results": {
+        "train_episodes": 3000,
+        "train_final_epsilon": 0.0,
+        "train_window_success_rate": 0.76,
+        "train_window_avg_reward": 16.73900999999999,
+        "train_window_avg_steps": 190.99,
+        "inference_episodes": 50,
+        "inference_success_rate": 0.02,
+        "inference_avg_reward": 2.638059999999971,
+        "inference_avg_steps": 441.94
+    }
+}
