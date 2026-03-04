@@ -59,28 +59,6 @@ class BaseAgent(ABC):
         return self.config.get("algo", "BaseAgent")
 
 
-class RandomAgent(BaseAgent):
-    """Dummy agent for testing infrastructure"""
-    def __init__(self, config, obs_shape, num_actions, device):
-        super().__init__(config, obs_shape, num_actions, device)
-        self.num_actions = num_actions
-
-    def choose_action(self, obs, epsilon=0.0) -> int:
-        return np.random.randint(0, self.num_actions)
-
-    def step(self, obs, action, reward, next_obs, done):
-        pass # do nothing
-
-    def update(self, *args, **kwargs):
-        pass # do nothing
-
-    def save(self, path):
-        pass # do nothing
-
-    def load(self, filepath: str):
-        pass # do nothing
-
-
 class DQNAgent(BaseAgent):
     """
     DQN Agent with Target Network and Replay Buffer.
@@ -448,6 +426,7 @@ class PPOAgent(BaseAgent):
         self.value_loss_coefficient = config.get('value_loss_coefficient', 0.5)
         self.entropy_coefficient = config.get('entropy_coefficient', 0.01)
         self.max_grad_norm   = config.get('max_grad_norm', 0.5)
+        self.minibatch_size  = int(self.config.get("minibatch_size", 64))
 
         # exploitation only (A2C stochastic not epsilon-greedy)
         self.epsilon    = 0.0   # attribute kept to adhere to interface
@@ -475,18 +454,17 @@ class PPOAgent(BaseAgent):
 
             # get action probs from network
             action_logits, _ = self.network(obs_tensor)
-            action_probs = F.softmax(action_logits, dim=-1)
 
             if epsilon == 0.0:
                 # greedy eval - log_prob meaningless here, return 0.0
-                action = int(action_probs.argmax(dim=-1).item())
+                action = int(action_logits.argmax(dim=-1).item())
                 return action, 0.0 # todo: output n/a for probability?
 
             # sample action, get its log_prob for PPO update
-            dist = torch.distributions.Categorical(action_probs)
+            dist = torch.distributions.Categorical(logits=action_logits)
             action = dist.sample()
             log_prob = dist.log_prob(action)
-            return int(action.item()), log_prob.item()
+            return int(action.item()), float(log_prob.item())
 
     def update(self, trajectories: List[Tuple[np.ndarray, int, float, np.ndarray, bool, float]]) -> Dict:
         """
@@ -513,55 +491,133 @@ class PPOAgent(BaseAgent):
 
         # calculate TD targets once (fixed across all update epochs)
         with torch.no_grad():
-            _, next_vals = self.network(next_states)
-            next_vals = next_vals.squeeze()
-        td_target = rewards + self.gamma * next_vals * (1 - dones)
+            _, old_values = self.network(states)
+            old_values = old_values.squeeze()
 
-        last_epoch_losses = {}
-        for _ in range(self.update_epochs):
-            # fwd pass thru shared network
-            action_logits, state_vals = self.network(states)
-            state_vals   = state_vals.squeeze()
-            action_probs = F.softmax(action_logits, dim=-1)
-            dist = torch.distributions.Categorical(action_probs)
+            _, next_values = self.network(next_states)
+            next_values = next_values.squeeze()
 
-            # advantage: action vs critic's baseline 
-            advantage = (td_target - state_vals).detach()
-
-            # surrogate objective (ratio clipped to [1-eps, 1+eps])
-            new_log_probs = dist.log_prob(actions)
-            ratio = torch.exp(new_log_probs - old_log_probs)
-            surr1 = ratio * advantage
-            surr2 = torch.clamp(ratio, (1 - self.clip_eps), (1 + self.clip_eps)) * advantage # clipping
-            
-            # losses
-            policy_loss = -torch.min(surr1, surr2).mean()
-            value_loss = F.mse_loss(state_vals, td_target.detach())
-
-            # combined loss with entropy bonus (for exploration)
-            entropy = dist.entropy().mean()
-            total_loss = (
-                policy_loss
-                + self.value_loss_coefficient * value_loss
-                - self.entropy_coefficient * entropy
+            advantages, returns = self._compute_gae(
+                rewards=rewards,
+                values=old_values,
+                next_values=next_values,
+                dones=dones,
+                gamma=self.gamma,
+                lam=self.gae_lambda,
             )
 
-            # apply grads
-            self.optimizer.zero_grad()
-            total_loss.backward()
-            nn.utils.clip_grad_norm_(self.network.parameters(), self.max_grad_norm)
-            self.optimizer.step()
+            # DEBUG
+            raw_adv_mean = advantages.mean().item()
+            raw_adv_std  = advantages.std(unbiased=False).item()
+            raw_adv_min = float(advantages.min().item())
+            raw_adv_max = float(advantages.max().item())
+            returns_mean = float(returns.mean().item())
+            returns_std  = float(returns.std(unbiased=False).item())
+            values_old_mean = float(old_values.mean().item())
+            values_old_std  = float(old_values.std(unbiased=False).item())
 
-            last_epoch_losses = {
-                'policy_loss':    policy_loss.item(),
-                'value_loss':     value_loss.item(),
-                'entropy':        entropy.item(),
-                'total_loss':     total_loss.item(),
-                'mean_advantage': advantage.mean().item(),
-            }
+            # normalize advantage
+            adv_std = advantages.std(unbiased=False)
+            advantages = (advantages - advantages.mean()) / (adv_std + 1e-8)
+
+            # DEBUG: explained variance (diagnostic) 
+            y = returns
+            y_predicted = old_values
+            explained_var = 1.0 - torch.var(y - y_predicted) / (torch.var(y) + 1e-8)
+
+        # (mini-)batch epochs
+        N = states.shape[0]
+        minibatch_size = min(self.minibatch_size, N)
+
+        last_epoch_stats = {}   # DEBUG: track diagnostics across LAST epoch (for logging)
+        for _ in range(self.update_epochs):
+            idx = torch.randperm(N, device=self.device)
+
+            # DEBUG
+            approx_kl_epoch = 0.0
+            clip_frac_epoch = 0.0
+            mb_count = 0
+            ratio_mean_sum = 0.0
+            ratio_std_sum  = 0.0
+            v_mean_sum = 0.0
+            v_std_sum  = 0.0
+
+            for start in range(0, N, minibatch_size):
+                mb = idx[start:(start + minibatch_size)]
+
+                logits, values = self.network(states[mb])
+                values = values.squeeze()
+
+                dist = torch.distributions.Categorical(logits=logits)
+                new_log_probs = dist.log_prob(actions[mb])
+
+                ratio = torch.exp(new_log_probs - old_log_probs[mb])
+                surr1 = ratio * advantages[mb]
+
+                ratio2 = torch.clamp(input=ratio, min=(1 - self.clip_eps), max=(1 + self.clip_eps))
+                surr2 = ratio2 * advantages[mb]
+
+                policy_loss = -1 * torch.min(surr1, surr2).mean()
+
+                # value clipping (for stablity)
+                old_values_copy = old_values[mb]
+                clipped_values = old_values_copy + (values - old_values_copy).clamp(-self.clip_eps, self.clip_eps)
+
+                vf_loss1 = (values - returns[mb]).pow(2)
+                vf_loss2 = (clipped_values - returns[mb]).pow(2)
+                value_loss = 0.5 * torch.max(vf_loss1, vf_loss2).mean()
+
+                entropy = dist.entropy().mean()
+                total_loss = policy_loss
+                total_loss += self.value_loss_coefficient * value_loss
+                total_loss -= self.entropy_coefficient * entropy
+
+                # DEBUG: minibatch diagnostics
+                with torch.no_grad():
+                    approx_kl = (old_log_probs[mb] - new_log_probs).mean()
+                    clip_frac = ((ratio - 1.0).abs() > self.clip_eps).float().mean()
+                    
+                    ratio_mean_sum += float(ratio.mean().item())
+                    ratio_std_sum  += float(ratio.std(unbiased=False).item())
+                    v_mean_sum += float(values.mean().item())
+                    v_std_sum  += float(values.std(unbiased=False).item())
+                    approx_kl_epoch += float(approx_kl.item())
+                    clip_frac_epoch += float(clip_frac.item())
+                    mb_count += 1
+
+                # optimize
+                self.optimizer.zero_grad()
+                total_loss.backward()
+                nn.utils.clip_grad_norm_(parameters=self.network.parameters(), max_norm=self.max_grad_norm)
+                self.optimizer.step()
+
+                last_epoch_stats = {
+                    "policy_loss": float(policy_loss.item()),
+                    "value_loss": float(value_loss.item()),
+                    "entropy": float(entropy.item()),
+                    "total_loss": float(total_loss.item()),
+                }
+
+        # DEBUG: aggregate diagnostics from last epoch’s minibatches
+        if mb_count > 0:
+            last_epoch_stats["approx_kl_mean"] = approx_kl_epoch / mb_count
+            last_epoch_stats["clip_frac_mean"] = clip_frac_epoch / mb_count
+            last_epoch_stats["ratio_mean"] = ratio_mean_sum / mb_count
+            last_epoch_stats["ratio_std"] = ratio_std_sum / mb_count
+            last_epoch_stats["v_mean"] = v_mean_sum / mb_count
+            last_epoch_stats["v_std"] = v_std_sum / mb_count
+        last_epoch_stats["raw_adv_mean"] = raw_adv_mean
+        last_epoch_stats["raw_adv_std"]  = raw_adv_std
+        last_epoch_stats["returns_mean"] = returns_mean
+        last_epoch_stats["raw_adv_min"] = raw_adv_min
+        last_epoch_stats["raw_adv_max"] = raw_adv_max
+        last_epoch_stats["returns_std"]  = returns_std
+        last_epoch_stats["values_old_mean"] = values_old_mean
+        last_epoch_stats["values_old_std"]  = values_old_std
+        last_epoch_stats["explained_variance"] = float(explained_var.item())
 
         self.steps_done += 1
-        return last_epoch_losses
+        return last_epoch_stats
 
     def save(self, path: str) -> None:
         """
@@ -587,6 +643,19 @@ class PPOAgent(BaseAgent):
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.steps_done = checkpoint['steps_done']
         print(f"[PPO] Checkpoint loaded from {filepath} (step: {self.steps_done})")
+
+    def _compute_gae(self, rewards: torch.Tensor, values: torch.Tensor, next_values: torch.Tensor, 
+                     dones: torch.Tensor, gamma: float, lam: float) -> Tuple[torch.Tensor, torch.Tensor]:
+        T = rewards.shape[0]
+        advantages = torch.zeros_like(rewards)
+        gae = 0.0
+        for t in reversed(range(T)):
+            nonterminal = 1.0 - dones[t]
+            delta = rewards[t] + gamma * next_values[t] * nonterminal - values[t]
+            gae = delta + gamma * lam * nonterminal * gae
+            advantages[t] = gae
+        returns = advantages + values
+        return advantages, returns
 
 
 class DDQNPERAgent(BaseAgent):

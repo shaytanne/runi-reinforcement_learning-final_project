@@ -125,7 +125,7 @@ class Experiment:
                 obs = next_obs
             
             if not update_per_step:
-                self.agent.update(trajectories)
+                update_info = self.agent.update(trajectories)
 
             # save recorded video
             if record_episode_video:
@@ -140,7 +140,8 @@ class Experiment:
             metrics_handler.update(reward=episode_rewards, steps=episode_steps, success=is_success)
             metrics_handler.print_training_status(episode=episode, epsilon=self.agent.epsilon)
             self.logger.log(filename="training_log", 
-                            episode=episode, reward=episode_rewards, steps=episode_steps, epsilon=self.agent.epsilon, success=is_success)
+                            episode=episode, reward=episode_rewards, steps=episode_steps, epsilon=self.agent.epsilon, success=is_success,
+                            **update_info)
             
             # log action distribution (debug)
             action_dist = {f"action_{a}": episode_action_counts.get(a, 0) for a in range(self.env.action_space.n)}
