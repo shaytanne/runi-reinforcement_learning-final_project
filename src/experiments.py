@@ -217,11 +217,12 @@ SET4_DDQN_PER_KDB["config"].update({
     "max_steps":            450,
 
     # buffer
-    "buffer_capacity":      120_000,
-    "min_buffer_size":      5000,
+    "buffer_capacity":      400_000,
+    "min_buffer_size":      20_000,
     "batch_size":           256,
 
     # exploration
+    "epsilon_decay":        0.9977, 
     "epsilon_min":          0.1, 
 
     # update schedule
