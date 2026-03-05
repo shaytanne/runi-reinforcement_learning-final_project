@@ -265,6 +265,32 @@ SET4_PPO_KDB["config"].update({
     },
 })
 
+SET4_PPO_FINE_TUNE = {
+    "name": "SET4_PPO_Fine_Tune",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+SET4_PPO_FINE_TUNE["config"].update({
+    "env_name": "KeyDoorBall",
+    "obs_shape": (84, 84, 1),
+    "max_steps": 450,
+    "seed": 1772571932,
+    "training_episodes": 800,
+    "inference_episodes": 50,
+    "minibatch_size": 64,
+    "entropy_coefficient": 0.001,   # very low entropy for fine-tuning (tiny bit of randomness)
+    "update_epochs": 2,             # more update epochs for fine-tuning
+    "learning_rate": 1e-4,          # lower learning rate for stability near end
+    "reward_shaping": {
+        "key": 1.0,
+        "door": 2.0,
+        "room_crossing": 3,
+        "ball": 4.0,
+        "goal": 12.0,
+        "turn_penalty": 0.0,
+        "step": 0.001,
+    },
+})
+
 
 # =====================================================================
 #   SET 5: SimpleGrid — Algorithm Comparison (DQN vs A2C vs PPO)

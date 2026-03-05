@@ -350,11 +350,12 @@ def plot_comparison(run_directories: Dict, window: int = 50, save_dir: str = "re
     print(f"Comparison plot saved to: {save_path}")
 
 
-def analyze_inference(log_dir: str) -> None:
+def analyze_inference(log_dir: str, mode: str = "greedy") -> None:
     """
     Reads inference_log.csv, calculates stats, generates report & plots
     """
-    csv_path = os.path.join(log_dir, "inference_log.csv")
+    filename = f"inference_log_{mode}.csv"
+    csv_path = os.path.join(log_dir, filename)
     if not os.path.exists(csv_path):
         print(f"No inference log found at {csv_path}")
         return
@@ -372,7 +373,7 @@ def analyze_inference(log_dir: str) -> None:
         print(f"   Avg Steps:    {avg_steps:.1f}")
 
         # save text report
-        report_path = os.path.join(log_dir, "inference_report.txt")
+        report_path = os.path.join(log_dir, f"inference_report_{mode}.txt")
         with open(report_path, "w") as f:
             f.write(f"Inference Analysis ({len(df)} episodes):\n")
             f.write(f"Success Rate: {success_rate:.2f}%\n")
@@ -404,7 +405,7 @@ def analyze_inference(log_dir: str) -> None:
         plt.legend()
         plt.grid(True, alpha=0.3)
         
-        save_path = os.path.join(log_dir, "inference_histogram.png")
+        save_path = os.path.join(log_dir, f"inference_histogram_{mode}.png")
         plt.savefig(save_path)
         plt.close()
         print(f"Inference plots saved to: {save_path}")

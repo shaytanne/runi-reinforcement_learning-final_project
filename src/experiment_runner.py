@@ -156,54 +156,147 @@ class Experiment:
         # training metrics for whole experiment
         return metrics_handler.get_training_metrics(epsilon=self.agent.epsilon)
 
+    # @timer
+    # def evaluate(self) -> Dict[str, int | float]:
+    #     """
+    #     Runs  inference stage with greedy action (epsilon=0)
+    #     Also handles:
+    #     - video recording
+    #     - logging results
+    #     Returns inference metrics object
+    #     """
+    #     print(f"\nStarting Inference ({self.inference_episodes} episodes)...")
+
+    #     metrics_handler = MetricsHandler(num_episodes=self.inference_episodes)   
+
+    #     for episode in range(1, self.inference_episodes + 1):
+    #         # episode resets
+    #         obs, _ = self.env.reset()
+    #         done = False
+    #         episode_rewards = 0
+    #         episode_steps = 0
+
+    #         if episode == 1: self.video_recorder.start(stage="inference")
+            
+    #         while not done:
+    #             # record video of first inference episode (post training)
+    #             if episode == 1: self.video_recorder.capture()
+                
+    #             # take greedy action (no exploration)
+    #             action = self.agent.choose_action(obs=obs, epsilon=0.0)
+    #             if isinstance(action, tuple):   # handle PPO choose_action output
+    #                 action = action[0]
+
+    #             # env step
+    #             obs, reward, terminated, truncated, _ = self.env.step(action)
+    #             done = terminated or truncated
+                
+    #             episode_rewards += reward
+    #             episode_steps += 1
+            
+    #         # record video of first inference episode
+    #         if episode == 1:
+    #             self.video_recorder.stop()
+    #             print(f"Post-training video saved during inference to {self.video_recorder.filename}")
+
+    #         # log episode metrics
+    #         is_success = terminated
+    #         metrics_handler.update(reward=episode_rewards, steps=episode_steps, success=is_success)
+    #         self.logger.log(filename="inference_log", 
+    #                         episode=episode, reward=episode_rewards, steps=episode_steps, success=is_success)
+
+    #     return metrics_handler.get_inference_metrics()
+
     @timer
     def evaluate(self) -> Dict[str, int | float]:
         """
-        Runs  inference stage with greedy action (epsilon=0)
-        Also handles:
-        - video recording
-        - logging results
-        Returns inference metrics object
-        """
-        print(f"\nStarting Inference ({self.inference_episodes} episodes)...")
+        Runs inference in two modes:
+        1) greedy: epsilon=0.0 (argmax for PPO in your choose_action)
+        2) stochastic: sample from policy (PPO) by calling choose_action without epsilon override
 
-        metrics_handler = MetricsHandler(num_episodes=self.inference_episodes)   
+        Logs:
+        - inference_log_greedy.csv
+        - inference_log_stochastic.csv
+        Returns:
+        - keeps existing 'inference_*' keys for greedy (backwards compatible)
+        - adds 'inference_stochastic_*' keys for stochastic
+        """
+        print(f"\nStarting Inference ({self.inference_episodes} episodes) in 2 modes: greedy + stochastic...")
+
+        # Greedy: keep as primary + record video here (so you still get a deterministic video)
+        greedy_metrics = self._run_eval(
+            mode_name="greedy",
+            epsilon_override=0.0,
+            log_filename="inference_log_greedy",
+            record_video=True,
+        )
+
+        # Stochastic: PPO policy-as-trained (sample). No video by default (set True if you want).
+        stochastic_metrics = self._run_eval(
+            mode_name="stochastic",
+            epsilon_override=None,
+            log_filename="inference_log_stochastic",
+            record_video=False,
+        )
+
+        # Backwards compatible return:
+        # - Keep greedy keys as 'inference_*'
+        # - Add stochastic keys as 'inference_stochastic_*'
+        out = dict(greedy_metrics)
+        for k, v in stochastic_metrics.items():
+            if k.startswith("inference_"):
+                out["inference_stochastic_" + k[len("inference_"):]] = v
+            else:
+                out["inference_stochastic_" + k] = v
+
+        return out
+    
+    def _run_eval(self, mode_name: str, epsilon_override, log_filename: str, record_video: bool) -> Dict[str, int | float]:
+        metrics_handler = MetricsHandler(num_episodes=self.inference_episodes)
 
         for episode in range(1, self.inference_episodes + 1):
-            # episode resets
             obs, _ = self.env.reset()
             done = False
-            episode_rewards = 0
+            episode_rewards = 0.0
             episode_steps = 0
 
-            if episode == 1: self.video_recorder.start(stage="inference")
-            
+            if record_video and episode == 1:
+                self.video_recorder.start(stage=f"inference_{mode_name}")
+
             while not done:
-                # record video of first inference episode (post training)
-                if episode == 1: self.video_recorder.capture()
-                
-                # take greedy action (no exploration)
-                action = self.agent.choose_action(obs=obs, epsilon=0.0)
-                if isinstance(action, tuple):   # handle PPO choose_action output
+                if record_video and episode == 1:
+                    self.video_recorder.capture()
+
+                # --- action selection ---
+                if epsilon_override is None:
+                    # PPO stochastic: sample from policy distribution
+                    action = self.agent.choose_action(obs=obs)
+                else:
+                    # greedy or explicit epsilon
+                    action = self.agent.choose_action(obs=obs, epsilon=epsilon_override)
+
+                if isinstance(action, tuple):  # PPO returns (action, log_prob)
                     action = action[0]
 
-                # env step
                 obs, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
-                
-                episode_rewards += reward
-                episode_steps += 1
-            
-            # record video of first inference episode
-            if episode == 1:
-                self.video_recorder.stop()
-                print(f"Post-training video saved during inference to {self.video_recorder.filename}")
 
-            # log episode metrics
+                episode_rewards += float(reward)
+                episode_steps += 1
+
+            if record_video and episode == 1:
+                self.video_recorder.stop()
+                print(f"[{mode_name}] video saved to {self.video_recorder.filename}")
+
             is_success = terminated
             metrics_handler.update(reward=episode_rewards, steps=episode_steps, success=is_success)
-            self.logger.log(filename="inference_log", 
-                            episode=episode, reward=episode_rewards, steps=episode_steps, success=is_success)
+            self.logger.log(
+                filename=log_filename,
+                episode=episode,
+                reward=episode_rewards,
+                steps=episode_steps,
+                success=is_success
+            )
 
         return metrics_handler.get_inference_metrics()
 

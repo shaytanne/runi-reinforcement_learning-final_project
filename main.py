@@ -8,7 +8,7 @@ from src.experiment_runner import Experiment
 from src.utils import analyze_inference, plot_training_curves, save_experiment_report, set_random_seed, get_device, plot_milestone_progress
 
 
-def run_single_experiment(config: Dict, exp_name: str, device: torch.device) -> None:
+def run_single_experiment(config: Dict, exp_name: str, device: torch.device, pretrained_model_path: str = None) -> None:
     """Runs one full experiment according to config"""
     print(f"--- Starting Experiment: {exp_name} ---")
     print(config)
@@ -16,6 +16,11 @@ def run_single_experiment(config: Dict, exp_name: str, device: torch.device) -> 
     set_random_seed(config["seed"])
     
     exp = Experiment(config=config, exp_name=exp_name, device=device)
+    if pretrained_model_path:
+        exp.agent.load(filepath=pretrained_model_path)
+        for group in exp.agent.optimizer.param_groups:
+            group["lr"] = config["learning_rate"]
+    
 
     # training (note @timer decorator on train(), adds runtime to output)
     train_metrics, train_time = exp.train()
@@ -24,7 +29,8 @@ def run_single_experiment(config: Dict, exp_name: str, device: torch.device) -> 
 
     # inference (note @timer decorator on evaluate(), adds runtime to output)
     inference_metrics, inference_time = exp.evaluate()
-    analyze_inference(log_dir=exp.results_dir)
+    analyze_inference(log_dir=exp.results_dir, mode="greedy")
+    analyze_inference(log_dir=exp.results_dir, mode="stochastic")
 
     # collect training + inference metrics
     experiment_metrics = train_metrics | inference_metrics 
@@ -49,9 +55,14 @@ def main():
     device = get_device()
 
     # define exp set:
-    experiments = [SET4_PPO_KDB]
+    experiments = [SET4_PPO_FINE_TUNE]
     for exp in experiments:
-        run_single_experiment(exp["config"], exp["name"], device=device)
+        run_single_experiment(
+            config=exp["config"], 
+            exp_name=exp["name"], 
+            device=device, 
+            pretrained_model_path="official_results\\SET4_PPO_KDB_20260305-001313\\final_model.pt"
+        )
 
 
 if __name__ == "__main__":
