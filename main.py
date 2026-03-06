@@ -55,13 +55,13 @@ def main():
     device = get_device()
 
     # define exp set:
-    experiments = [SET4_PPO_EXTEND, SET4_PPO_FINE_TUNE_POLISH]
+    experiments = [SET6_PPO_SAFE_KDB]
     for exp in experiments:
         run_single_experiment(
             config=exp["config"], 
             exp_name=exp["name"], 
             device=device, 
-            pretrained_model_path="official_results\\SET4_PPO_KDB_20260305-001313\\final_model.pt"
+            # pretrained_model_path="official_results\\SET4_PPO_KDB_20260305-001313\\final_model.pt" # todo
         )
 
 

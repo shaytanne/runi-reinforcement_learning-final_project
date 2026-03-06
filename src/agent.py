@@ -396,13 +396,12 @@ class PPOAgent(BaseAgent):
     """
     PPO (Proximal Policy Optimization) Agent
 
-    - collects one full episode, then trains on it for a few passes
-    - limits magnitude of individual policy updates, keeps training stable
-    - stores old log_probs to compare current policy to prev
-    - on-policy, discards episode after updating
-
-    Obs format: uint8 (H, W, C) → normalized + transposed internally
-    choose_action() returns tuple (action, log_prob)
+    Safe submission version:
+    - clipped PPO policy objective
+    - one-step TD target
+    - plain MSE value loss (no value clipping)
+    - no advantage normalization
+    - minibatch / multi-epoch PPO updates
     """
 
     def __init__(self, config: Dict, obs_shape: np.ndarray, num_actions: int, device: torch.device):
@@ -416,49 +415,47 @@ class PPOAgent(BaseAgent):
         self.steps_done = 0
 
         # hyperparams
-        self.gamma           = config.get('gamma', 0.99)
-        self.learning_rate   = config.get('learning_rate', 3e-4)
-        self.clip_eps        = config.get('clip_eps', 0.2)
-        self.gae_lambda      = config.get('gae_lambda', 0.95)
-        self.update_epochs   = config.get('update_epochs', 4)   # reuse trajectory N times
-        self.value_loss_coefficient = config.get('value_loss_coefficient', 0.5)
-        self.entropy_coefficient = config.get('entropy_coefficient', 0.01)
-        self.max_grad_norm   = config.get('max_grad_norm', 0.5)
-        self.minibatch_size  = int(self.config.get("minibatch_size", 64))
+        self.gamma = config.get("gamma", 0.99)
+        self.learning_rate = config.get("learning_rate", 3e-4)
+        self.clip_eps = config.get("clip_eps", 0.2)
+        self.update_epochs = config.get("update_epochs", 4)
+        self.value_loss_coefficient = config.get("value_loss_coefficient", 0.5)
+        self.entropy_coefficient = config.get("entropy_coefficient", 0.01)
+        self.max_grad_norm = config.get("max_grad_norm", 0.5)
+        self.minibatch_size = int(config.get("minibatch_size", 64))
 
-        # exploitation only (A2C stochastic not epsilon-greedy)
-        self.epsilon    = 0.0   # attribute kept to adhere to interface
-        
+        # kept for interface compatibility
+        self.epsilon = 0.0
+
         # shared Actor-Critic network
-        self.network   = ActorCriticNetwork(observation_shape=obs_shape, num_actions=num_actions).to(device)
-        self.optimizer = torch.optim.Adam(self.network.parameters(), lr=self.learning_rate)
+        self.network = ActorCriticNetwork(
+            observation_shape=obs_shape,
+            num_actions=num_actions
+        ).to(device)
+
+        self.optimizer = torch.optim.Adam(
+            self.network.parameters(),
+            lr=self.learning_rate
+        )
 
     def choose_action(self, obs: np.ndarray, epsilon: float | None = None) -> Tuple[int, float]:
         """
         Sample action from current policy π(a|s) + return its log_prob
 
-        - log_prob stored in the trajectory, used later as old_log_prob in PPO clipped-ratio calculation
-        - when epsilon=0.0 (eval mode): greedy argmax, log_prob=0.0 (unused)
-
-        :param obs: uint8 ndarray (H, W, C)
-        :return: (action index, log-prob of the action)
+        - training: sample from categorical distribution
+        - eval (epsilon=0.0): greedy argmax
         """
-
         with torch.no_grad():
-            # ingest observation
-            obs_tensor = torch.as_tensor(obs, device=self.device).float()   # uint8 -> float32
-            obs_tensor = obs_tensor.div(255.0)                              # normalize to [0,1]
-            obs_tensor = obs_tensor.permute(2, 0, 1).unsqueeze(0)           # (H,W,C) -> (1,C,H,W)
+            obs_tensor = torch.as_tensor(obs, device=self.device).float()
+            obs_tensor = obs_tensor.div(255.0)
+            obs_tensor = obs_tensor.permute(2, 0, 1).unsqueeze(0)
 
-            # get action probs from network
             action_logits, _ = self.network(obs_tensor)
 
             if epsilon == 0.0:
-                # greedy eval - log_prob meaningless here, return 0.0
                 action = int(action_logits.argmax(dim=-1).item())
-                return action, 0.0 # todo: output n/a for probability?
+                return action, 0.0
 
-            # sample action, get its log_prob for PPO update
             dist = torch.distributions.Categorical(logits=action_logits)
             action = dist.sample()
             log_prob = dist.log_prob(action)
@@ -466,12 +463,14 @@ class PPOAgent(BaseAgent):
 
     def update(self, trajectories: List[Tuple[np.ndarray, int, float, np.ndarray, bool, float]]) -> Dict:
         """
-        PPO update: run <update_epochs> grad steps on the collected episode
-        Trajectory format: (obs, action, reward, next_obs, done, log_prob) - note extra log_prob field
-        
-        :param trajectories: list of trajectory data objects (obs, action, reward, next_obs, done, log_prob)
-                          obs, next_obs are uint8 (H, W, C) ndarrays
-        :return: dict with last epoch's loss components: policy_loss, value_loss, entropy, total_loss, mean_advantage
+        PPO update: run multiple minibatch epochs on one collected rollout.
+
+        Trajectory format:
+            (obs, action, reward, next_obs, done, log_prob)
+
+        Notes:
+        - "done" here is terminated-only (not truncated), as passed by Experiment.train()
+        - that means TD targets still bootstrap across time-limit truncation
         """
         if len(trajectories) == 0:
             return {}
@@ -479,15 +478,15 @@ class PPOAgent(BaseAgent):
         states, actions, rewards, next_states, dones, old_log_probs = zip(*trajectories)
 
         # uint8 (N,H,W,C) -> float32 (N,C,H,W), normalized
-        states      = torch.as_tensor(np.array(states),      device=self.device).float().div(255.0).permute(0, 3, 1, 2)
+        states = torch.as_tensor(np.array(states), device=self.device).float().div(255.0).permute(0, 3, 1, 2)
         next_states = torch.as_tensor(np.array(next_states), device=self.device).float().div(255.0).permute(0, 3, 1, 2)
-        
-        actions       = torch.tensor(actions,       dtype=torch.long,    device=self.device)
-        rewards       = torch.tensor(rewards,       dtype=torch.float32, device=self.device)
-        dones         = torch.tensor(dones,         dtype=torch.float32, device=self.device)
+
+        actions = torch.tensor(actions, dtype=torch.long, device=self.device)
+        rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device)
+        dones = torch.tensor(dones, dtype=torch.float32, device=self.device)
         old_log_probs = torch.tensor(old_log_probs, dtype=torch.float32, device=self.device)
 
-        # calculate TD targets once (fixed across all update epochs)
+        # compute fixed TD targets / advantages once
         with torch.no_grad():
             _, old_values = self.network(states)
             old_values = old_values.squeeze()
@@ -495,53 +494,46 @@ class PPOAgent(BaseAgent):
             _, next_values = self.network(next_states)
             next_values = next_values.squeeze()
 
-            advantages, returns = self._compute_gae(
-                rewards=rewards,
-                values=old_values,
-                next_values=next_values,
-                dones=dones,
-                gamma=self.gamma,
-                lam=self.gae_lambda,
-            )
+            # safe PPO: one-step TD target
+            returns = rewards + self.gamma * next_values * (1 - dones)
 
-            # DEBUG
-            raw_adv_mean = advantages.mean().item()
-            raw_adv_std  = advantages.std(unbiased=False).item()
+            # one-step advantage
+            advantages = returns - old_values
+
+            # diagnostics
+            raw_adv_mean = float(advantages.mean().item())
+            raw_adv_std = float(advantages.std(unbiased=False).item())
             raw_adv_min = float(advantages.min().item())
             raw_adv_max = float(advantages.max().item())
+
             returns_mean = float(returns.mean().item())
-            returns_std  = float(returns.std(unbiased=False).item())
+            returns_std = float(returns.std(unbiased=False).item())
+
             values_old_mean = float(old_values.mean().item())
-            values_old_std  = float(old_values.std(unbiased=False).item())
+            values_old_std = float(old_values.std(unbiased=False).item())
 
-            # normalize advantage
-            adv_std = advantages.std(unbiased=False)
-            advantages = (advantages - advantages.mean()) / (adv_std + 1e-8)
-
-            # DEBUG: explained variance (diagnostic) 
             y = returns
             y_predicted = old_values
             explained_var = 1.0 - torch.var(y - y_predicted) / (torch.var(y) + 1e-8)
 
-        # (mini-)batch epochs
+        # minibatch PPO epochs
         N = states.shape[0]
         minibatch_size = min(self.minibatch_size, N)
 
-        last_epoch_stats = {}   # DEBUG: track diagnostics across LAST epoch (for logging)
+        last_epoch_stats = {}
         for _ in range(self.update_epochs):
             idx = torch.randperm(N, device=self.device)
 
-            # DEBUG
             approx_kl_epoch = 0.0
             clip_frac_epoch = 0.0
             mb_count = 0
             ratio_mean_sum = 0.0
-            ratio_std_sum  = 0.0
+            ratio_std_sum = 0.0
             v_mean_sum = 0.0
-            v_std_sum  = 0.0
+            v_std_sum = 0.0
 
             for start in range(0, N, minibatch_size):
-                mb = idx[start:(start + minibatch_size)]
+                mb = idx[start:start + minibatch_size]
 
                 logits, values = self.network(states[mb])
                 values = values.squeeze()
@@ -552,41 +544,41 @@ class PPOAgent(BaseAgent):
                 ratio = torch.exp(new_log_probs - old_log_probs[mb])
                 surr1 = ratio * advantages[mb]
 
-                ratio2 = torch.clamp(input=ratio, min=(1 - self.clip_eps), max=(1 + self.clip_eps))
-                surr2 = ratio2 * advantages[mb]
+                ratio_clipped = torch.clamp(
+                    ratio,
+                    min=(1 - self.clip_eps),
+                    max=(1 + self.clip_eps)
+                )
+                surr2 = ratio_clipped * advantages[mb]
 
-                policy_loss = -1 * torch.min(surr1, surr2).mean()
+                policy_loss = -torch.min(surr1, surr2).mean()
 
-                # value clipping (for stablity)
-                old_values_copy = old_values[mb]
-                clipped_values = old_values_copy + (values - old_values_copy).clamp(-self.clip_eps, self.clip_eps)
-
-                vf_loss1 = (values - returns[mb]).pow(2)
-                vf_loss2 = (clipped_values - returns[mb]).pow(2)
-                value_loss = 0.5 * torch.max(vf_loss1, vf_loss2).mean()
+                # safe PPO critic loss: plain MSE
+                value_loss = 0.5 * (values - returns[mb]).pow(2).mean()
 
                 entropy = dist.entropy().mean()
-                total_loss = policy_loss
-                total_loss += self.value_loss_coefficient * value_loss
-                total_loss -= self.entropy_coefficient * entropy
 
-                # DEBUG: minibatch diagnostics
+                total_loss = (
+                    policy_loss
+                    + self.value_loss_coefficient * value_loss
+                    - self.entropy_coefficient * entropy
+                )
+
                 with torch.no_grad():
                     approx_kl = (old_log_probs[mb] - new_log_probs).mean()
                     clip_frac = ((ratio - 1.0).abs() > self.clip_eps).float().mean()
-                    
+
                     ratio_mean_sum += float(ratio.mean().item())
-                    ratio_std_sum  += float(ratio.std(unbiased=False).item())
+                    ratio_std_sum += float(ratio.std(unbiased=False).item())
                     v_mean_sum += float(values.mean().item())
-                    v_std_sum  += float(values.std(unbiased=False).item())
+                    v_std_sum += float(values.std(unbiased=False).item())
                     approx_kl_epoch += float(approx_kl.item())
                     clip_frac_epoch += float(clip_frac.item())
                     mb_count += 1
 
-                # optimize
                 self.optimizer.zero_grad()
                 total_loss.backward()
-                nn.utils.clip_grad_norm_(parameters=self.network.parameters(), max_norm=self.max_grad_norm)
+                nn.utils.clip_grad_norm_(self.network.parameters(), self.max_grad_norm)
                 self.optimizer.step()
 
                 last_epoch_stats = {
@@ -594,9 +586,9 @@ class PPOAgent(BaseAgent):
                     "value_loss": float(value_loss.item()),
                     "entropy": float(entropy.item()),
                     "total_loss": float(total_loss.item()),
+                    "mean_advantage": float(advantages.mean().item()),
                 }
 
-        # DEBUG: aggregate diagnostics from last epoch’s minibatches
         if mb_count > 0:
             last_epoch_stats["approx_kl_mean"] = approx_kl_epoch / mb_count
             last_epoch_stats["clip_frac_mean"] = clip_frac_epoch / mb_count
@@ -604,14 +596,15 @@ class PPOAgent(BaseAgent):
             last_epoch_stats["ratio_std"] = ratio_std_sum / mb_count
             last_epoch_stats["v_mean"] = v_mean_sum / mb_count
             last_epoch_stats["v_std"] = v_std_sum / mb_count
+
         last_epoch_stats["raw_adv_mean"] = raw_adv_mean
-        last_epoch_stats["raw_adv_std"]  = raw_adv_std
-        last_epoch_stats["returns_mean"] = returns_mean
+        last_epoch_stats["raw_adv_std"] = raw_adv_std
         last_epoch_stats["raw_adv_min"] = raw_adv_min
         last_epoch_stats["raw_adv_max"] = raw_adv_max
-        last_epoch_stats["returns_std"]  = returns_std
+        last_epoch_stats["returns_mean"] = returns_mean
+        last_epoch_stats["returns_std"] = returns_std
         last_epoch_stats["values_old_mean"] = values_old_mean
-        last_epoch_stats["values_old_std"]  = values_old_std
+        last_epoch_stats["values_old_std"] = values_old_std
         last_epoch_stats["explained_variance"] = float(explained_var.item())
 
         self.steps_done += 1
@@ -620,16 +613,12 @@ class PPOAgent(BaseAgent):
     def save(self, path: str) -> None:
         """
         Save agent snapshot at checkpoint
-        - network state
-        - optimizer state
-        - step counter
-        - config
         """
         agent_dict = {
-            'network_state_dict':   self.network.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'steps_done':           self.steps_done,
-            'config':               self.config,
+            "network_state_dict": self.network.state_dict(),
+            "optimizer_state_dict": self.optimizer.state_dict(),
+            "steps_done": self.steps_done,
+            "config": self.config,
         }
         torch.save(agent_dict, path)
         print(f"[PPO] Checkpoint saved to {path}")
@@ -637,24 +626,10 @@ class PPOAgent(BaseAgent):
     def load(self, filepath: str) -> None:
         """Load network + optimizer state from checkpoint"""
         checkpoint = torch.load(filepath, map_location=self.device, weights_only=True)
-        self.network.load_state_dict(checkpoint['network_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.steps_done = checkpoint['steps_done']
+        self.network.load_state_dict(checkpoint["network_state_dict"])
+        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.steps_done = checkpoint["steps_done"]
         print(f"[PPO] Checkpoint loaded from {filepath} (step: {self.steps_done})")
-
-    def _compute_gae(self, rewards: torch.Tensor, values: torch.Tensor, next_values: torch.Tensor, 
-                     dones: torch.Tensor, gamma: float, lam: float) -> Tuple[torch.Tensor, torch.Tensor]:
-        T = rewards.shape[0]
-        advantages = torch.zeros_like(rewards)
-        gae = 0.0
-        for t in reversed(range(T)):
-            nonterminal = 1.0 - dones[t]
-            delta = rewards[t] + gamma * next_values[t] * nonterminal - values[t]
-            gae = delta + gamma * lam * nonterminal * gae
-            advantages[t] = gae
-        returns = advantages + values
-        return advantages, returns
-
 
 class DDQNPERAgent(BaseAgent):
     """

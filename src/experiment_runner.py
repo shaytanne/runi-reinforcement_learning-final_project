@@ -86,6 +86,7 @@ class Experiment:
             episode_steps = 0
             trajectories = []  # for episode-level updates (A2C)
             episode_action_counts = {} # debug
+            update_info = {}
 
             # todo: record at trianing end as well (last episode)?
             record_episode_video = (episode == self.training_episodes // 2)
