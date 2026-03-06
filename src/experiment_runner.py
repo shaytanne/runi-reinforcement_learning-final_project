@@ -236,7 +236,7 @@ class Experiment:
             mode_name="stochastic",
             epsilon_override=None,
             log_filename="inference_log_stochastic",
-            record_video=False,
+            record_video=True,
         )
 
         # Backwards compatible return:
