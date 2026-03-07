@@ -55,13 +55,13 @@ def main():
     device = get_device()
 
     # define exp set:
-    experiments = [EXP7A_PPO_GAE_ONLY]
+    experiments = [EXP7B_PPO_GAE_ONLY_FAILED_INTERACTION]
     for exp in experiments:
         run_single_experiment(
             config=exp["config"], 
             exp_name=exp["name"], 
             device=device, 
-            # pretrained_model_path="official_results\\SET4_PPO_KDB_20260305-001313\\final_model.pt" # todo
+            # pretrained_model_path="results\\EXP7A_PPO_GAE_ONLY_20260307-115948\\final_model.pt" # todo
         )
 
 

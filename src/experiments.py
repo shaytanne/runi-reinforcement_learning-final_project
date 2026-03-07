@@ -498,6 +498,51 @@ EXP7A_PPO_GAE_ONLY["config"].update({
     "max_grad_norm": 0.5,
 })
 
+EXP7A_PPO_GAE_EXTEND = {
+    "name": "EXP7A_PPO_GAE_EXTEND",
+    "config": copy.deepcopy(EXP7A_PPO_GAE_ONLY["config"]),
+}
+EXP7A_PPO_GAE_EXTEND["config"].update({
+    "training_episodes": 1000,   # additional episodes after loading 7A checkpoint
+    "inference_episodes": 100,
+})
+
+EXP7A_PPO_GAE_FINE_TUNE = {
+    "name": "EXP7A_PPO_GAE_FINE_TUNE",
+    "config": copy.deepcopy(EXP7A_PPO_GAE_ONLY["config"]),
+}
+EXP7A_PPO_GAE_FINE_TUNE["config"].update({
+    "training_episodes": 400,
+    "inference_episodes": 100,
+
+    "learning_rate": 5e-5,
+    "update_epochs": 2,
+    "entropy_coefficient": 5e-4,
+    
+    "gae_lambda": 0.95,
+    "clip_eps": 0.2,
+    "minibatch_size": 64,
+    "max_grad_norm": 0.5,
+    "value_loss_coefficient": 0.5,
+})
+
+EXP7B_PPO_GAE_ONLY_FAILED_INTERACTION = {
+    "name": "EXP7B_PPO_GAE_ONLY_FAILED_INTERACTION",
+    "config": copy.deepcopy(EXP7A_PPO_GAE_ONLY["config"]),
+}
+EXP7B_PPO_GAE_ONLY_FAILED_INTERACTION["config"].update({
+    "reward_shaping": {
+        "key": 1.0,
+        "door": 2.0,
+        "room_crossing": 3.0,
+        "ball": 4.0,
+        "goal": 12.0,
+        "step": 0.001,
+        "failed_pickup_penalty": 0.003,
+        "failed_toggle_penalty": 0.003,
+    },
+})
+
 # =====================================================================
 #   SET 5: SimpleGrid — Algorithm Comparison (DQN vs A2C vs PPO)
 # =====================================================================

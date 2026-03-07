@@ -466,6 +466,7 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
         reward_config = getattr(self, "reward_shaping", {})
         reward = 0.0
 
+        # milestone rewards:
         # key pickuop reward (before: no key, now: have key)
         if not self.prev_key and self.is_carrying_key():
             reward += reward_config.get("key", 0.5)
@@ -490,11 +491,20 @@ class KeyDoorBallEnv(BaseMiniGridEnv):
         if terminated:
             reward += reward_config.get("goal", 2.0)
 
-        # redundant direction-change penalty
-        if (self.prev_action is not None) and (self.prev_action in [0, 1]) and (action in [0, 1]):
-            if action != self.prev_action:   # redundant turn in opposite direction
-                reward -= reward_config.get("turn_penalty", 0.01)
+        # penalties:
+        # failed interaction penalties (idle pickup/toggle)
+        pickup_succeeded =  ((not self.prev_key)  and self.is_carrying_key()) or \
+                            ((not self.prev_ball) and self.is_carrying_ball())
+        toggle_succeeded = (self.prev_door != self.is_door_open())
 
+        # idle pickup
+        if action == 3 and (not pickup_succeeded):
+            reward -= reward_config.get("failed_pickup_penalty", 0.0)
+
+        # idle toggle
+        if action == 5 and (not toggle_succeeded):
+            reward -= reward_config.get("failed_toggle_penalty", 0.0)
+        
         # step penalty
         reward -= reward_config.get("step", 0.001)
 
