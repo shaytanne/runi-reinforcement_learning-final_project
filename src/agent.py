@@ -395,16 +395,11 @@ class A2CAgent(BaseAgent):
 class PPOAgent(BaseAgent):
     """
     PPO (Proximal Policy Optimization) Agent
-
-    Safe submission version:
     - clipped PPO policy objective
-    - NO GAE
-    - NO value clipping
-    - NO advantage normalization
-    - supports two course-safe return estimators:
-        1) td0           -> r + gamma * V(s') * (1 - done)
-        2) reward_to_go  -> discounted reward-to-go G_t
-    - minibatch / multi-epoch PPO updates
+    - GAE for advantage estimation
+    - MSE value loss 
+    - minibatch/multi-epoch updates
+    - clipped PPO policy objective
     """
 
     def __init__(self, config: Dict, obs_shape: np.ndarray, num_actions: int, device: torch.device):
@@ -416,6 +411,7 @@ class PPOAgent(BaseAgent):
 
         # hyperparams
         self.gamma = config.get("gamma", 0.99)
+        self.gae_lambda = config.get("gae_lambda", 0.95)
         self.learning_rate = config.get("learning_rate", 3e-4)
         self.clip_eps = config.get("clip_eps", 0.2)
         self.update_epochs = config.get("update_epochs", 4)
@@ -423,10 +419,6 @@ class PPOAgent(BaseAgent):
         self.entropy_coefficient = config.get("entropy_coefficient", 0.01)
         self.max_grad_norm = config.get("max_grad_norm", 0.5)
         self.minibatch_size = int(config.get("minibatch_size", 64))
-
-        # safe PPO return estimator:
-        # "td0" or "reward_to_go"
-        self.return_mode = config.get("return_mode", "td0")
 
         # kept for interface compatibility
         self.epsilon = 0.0
@@ -465,23 +457,6 @@ class PPOAgent(BaseAgent):
             log_prob = dist.log_prob(action)
             return int(action.item()), float(log_prob.item())
 
-    def _compute_reward_to_go_returns(self, rewards: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
-        """
-        Compute discounted reward-to-go:
-            G_t = r_t + gamma * r_{t+1} + gamma^2 * r_{t+2} + ...
-
-        Since trajectories are stored episode-by-episode for PPO, this naturally resets
-        at episode termination. We keep done handling for safety.
-        """
-        returns = torch.zeros_like(rewards, device=self.device)
-        running_return = torch.tensor(0.0, device=self.device)
-
-        for t in reversed(range(len(rewards))):
-            running_return = rewards[t] + self.gamma * running_return * (1.0 - dones[t])
-            returns[t] = running_return
-
-        return returns
-
     def update(self, trajectories: List[Tuple[np.ndarray, int, float, np.ndarray, bool, float]]) -> Dict:
         """
         PPO update: run multiple minibatch epochs on one collected rollout.
@@ -507,29 +482,22 @@ class PPOAgent(BaseAgent):
         dones = torch.tensor(dones, dtype=torch.float32, device=self.device)
         old_log_probs = torch.tensor(old_log_probs, dtype=torch.float32, device=self.device)
 
-        # compute fixed targets / advantages once
+        # compute fixed target/advantage once
         with torch.no_grad():
             _, old_values = self.network(states)
             old_values = old_values.squeeze()
 
-            if self.return_mode == "reward_to_go":
-                returns = self._compute_reward_to_go_returns(rewards=rewards, dones=dones)
-                advantages = returns - old_values
+            _, next_values = self.network(next_states)
+            next_values = next_values.squeeze()
 
-            elif self.return_mode == "td0":
-                _, next_values = self.network(next_states)
-                next_values = next_values.squeeze()
+            advantages, returns = self._compute_gae(
+                rewards=rewards,
+                values=old_values,
+                next_values=next_values,
+                dones=dones,
+            )
 
-                # one-step TD target
-                returns = rewards + self.gamma * next_values * (1 - dones)
-
-                # one-step advantage
-                advantages = returns - old_values
-
-            else:
-                raise ValueError(f"Unsupported PPO return_mode: {self.return_mode}")
-
-            # diagnostics
+            # diagnostics:
             raw_adv_mean = float(advantages.mean().item())
             raw_adv_std = float(advantages.std(unbiased=False).item())
             raw_adv_min = float(advantages.min().item())
@@ -639,6 +607,29 @@ class PPOAgent(BaseAgent):
         self.steps_done += 1
         return last_epoch_stats
 
+    def _compute_gae(
+        self,
+        rewards: torch.Tensor,
+        values: torch.Tensor,
+        next_values: torch.Tensor,
+        dones: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Compute GAE(λ) advantages & returns
+        returns_t = advantages_t + values_t
+        """
+        T = rewards.shape[0]
+        advantages = torch.zeros_like(rewards, device=self.device)
+        gae = torch.tensor(0.0, device=self.device)
+
+        for t in reversed(range(T)):
+            delta = rewards[t] + self.gamma * next_values[t] * (1.0 - dones[t]) - values[t]
+            gae = delta + self.gamma * self.gae_lambda * (1.0 - dones[t]) * gae
+            advantages[t] = gae
+
+        returns = advantages + values
+        return advantages, returns
+
     def save(self, path: str) -> None:
         agent_dict = {
             "network_state_dict": self.network.state_dict(),
@@ -656,7 +647,7 @@ class PPOAgent(BaseAgent):
         self.steps_done = checkpoint["steps_done"]
         print(f"[PPO] Checkpoint loaded from {filepath} (step: {self.steps_done})")
 
-        
+
 class DDQNPERAgent(BaseAgent):
     """
     Double DQN Agent with PER buffer
