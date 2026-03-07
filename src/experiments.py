@@ -61,7 +61,7 @@ A2C_BASE_CONFIG.update({
     "entropy_coefficient":      0.1,
 })
 
-PPO_BASE_CONFIG = copy.deepcopy(A2C_BASE_CONFIG)   # ← inherits from A2C, not SHARED
+PPO_BASE_CONFIG = copy.deepcopy(A2C_BASE_CONFIG)   # inherits from A2C, NOT SHARED
 PPO_BASE_CONFIG.update({
     "algo": "PPO",
 
@@ -354,13 +354,10 @@ SET4_PPO_FINE_TUNE_POLISH["config"].update({
 
 
 # =====================================================================
-#   exp set 6 safe PPO # todo
+#   SET 6: no improvement methods PPO playground
 # =====================================================================
-SET6_PPO_SAFE_KDB = {
-    "name": "SET6_PPO_SAFE_KDB",
-    "config": copy.deepcopy(PPO_BASE_CONFIG),
-}
-SET6_PPO_SAFE_KDB["config"].update({
+
+SET6_SAFE_BASE = {
     "env_name": "KeyDoorBall",
     "obs_shape": (84, 84, 1),
     "max_steps": 450,
@@ -370,9 +367,6 @@ SET6_PPO_SAFE_KDB["config"].update({
     "inference_episodes": 100,
 
     "minibatch_size": 64,
-    "learning_rate": 3e-4,
-    "update_epochs": 4,
-    "entropy_coefficient": 0.01,
     "clip_eps": 0.2,
     "max_grad_norm": 0.5,
     "value_loss_coefficient": 0.5,
@@ -386,7 +380,80 @@ SET6_PPO_SAFE_KDB["config"].update({
         "turn_penalty": 0.0,
         "step": 0.001,
     },
+}
+
+# reward-to-go returns + lower LR + less epochs + LOW entropy
+EXP6A_PPO_SAFE_RTG_LR1E4_E2_ENT1E3 = {
+    "name": "EXP6A_PPO_SAFE_RTG_LR1E4_E2_ENT1E3",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+EXP6A_PPO_SAFE_RTG_LR1E4_E2_ENT1E3["config"].update(SET6_SAFE_BASE)
+EXP6A_PPO_SAFE_RTG_LR1E4_E2_ENT1E3["config"].update({
+    "return_mode": "reward_to_go",
+    "learning_rate": 1e-4,
+    "update_epochs": 2,
+    "entropy_coefficient": 0.001,
 })
+
+# same as 6A, a bit more exploration
+EXP6B_PPO_SAFE_RTG_LR1E4_E2_ENT5E3 = {
+    "name": "EXP6B_PPO_SAFE_RTG_LR1E4_E2_ENT5E3",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+EXP6B_PPO_SAFE_RTG_LR1E4_E2_ENT5E3["config"].update(SET6_SAFE_BASE)
+EXP6B_PPO_SAFE_RTG_LR1E4_E2_ENT5E3["config"].update({
+    "return_mode": "reward_to_go",
+    "learning_rate": 1e-4,
+    "update_epochs": 2,
+    "entropy_coefficient": 0.005,
+})
+
+# same as 6A, more optimization per rollout
+EXP6C_PPO_SAFE_RTG_LR1E4_E4_ENT1E3 = {
+    "name": "EXP6C_PPO_SAFE_RTG_LR1E4_E4_ENT1E3",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+EXP6C_PPO_SAFE_RTG_LR1E4_E4_ENT1E3["config"].update(SET6_SAFE_BASE)
+EXP6C_PPO_SAFE_RTG_LR1E4_E4_ENT1E3["config"].update({
+    "return_mode": "reward_to_go",
+    "learning_rate": 1e-4,
+    "update_epochs": 4,
+    "entropy_coefficient": 0.001,
+})
+
+# same as 6A, with old higher LR
+EXP6D_PPO_SAFE_RTG_LR3E4_E2_ENT1E3 = {
+    "name": "EXP6D_PPO_SAFE_RTG_LR3E4_E2_ENT1E3",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+EXP6D_PPO_SAFE_RTG_LR3E4_E2_ENT1E3["config"].update(SET6_SAFE_BASE)
+EXP6D_PPO_SAFE_RTG_LR3E4_E2_ENT1E3["config"].update({
+    "return_mode": "reward_to_go",
+    "learning_rate": 3e-4,
+    "update_epochs": 2,
+    "entropy_coefficient": 0.001,
+})
+
+# control run: td(0) estimator, gentler hyperparams than first basic PPO exp
+EXP6E_PPO_SAFE_TD0_LR1E4_E2_ENT1E3 = {
+    "name": "EXP6E_PPO_SAFE_TD0_LR1E4_E2_ENT1E3",
+    "config": copy.deepcopy(PPO_BASE_CONFIG),
+}
+EXP6E_PPO_SAFE_TD0_LR1E4_E2_ENT1E3["config"].update(SET6_SAFE_BASE)
+EXP6E_PPO_SAFE_TD0_LR1E4_E2_ENT1E3["config"].update({
+    "return_mode": "td0",
+    "learning_rate": 1e-4,
+    "update_epochs": 2,
+    "entropy_coefficient": 0.001,
+})
+
+exp_set_6 = [
+    EXP6A_PPO_SAFE_RTG_LR1E4_E2_ENT1E3,
+    EXP6B_PPO_SAFE_RTG_LR1E4_E2_ENT5E3,
+    EXP6C_PPO_SAFE_RTG_LR1E4_E4_ENT1E3,
+    EXP6D_PPO_SAFE_RTG_LR3E4_E2_ENT1E3,
+    EXP6E_PPO_SAFE_TD0_LR1E4_E2_ENT1E3,
+]
 
 # =====================================================================
 #   SET 5: SimpleGrid — Algorithm Comparison (DQN vs A2C vs PPO)

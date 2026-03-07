@@ -20,7 +20,7 @@ def _load_experiment_runs(run_directories: Dict[str, str]) -> list[dict]:
         - label         (str)               experiment name
         - log_dir       (str)               path to results folder
         - training_df   (pd.DataFrame|None) training_log.csv
-        - milestone_df  (pd.DataFrame|None) milestone_log.csv (None for SimpleGrid)
+        - milestone_df  (pd.DataFrame|None) training_milestone_log.csv (None for SimpleGrid)
         - inference_df  (pd.DataFrame|None) inference_log.csv
         - report        (dict|None)         experiment_report.json
     """
@@ -45,8 +45,8 @@ def _load_experiment_runs(run_directories: Dict[str, str]) -> list[dict]:
             "label":        label,
             "log_dir":      log_dir,
             "training_df":  _load_csv("training_log.csv"),
-            "action_df":    _load_csv("action_dist_training.csv"), 
-            "milestone_df": _load_csv("milestone_log.csv"),
+            "action_df":    _load_csv("training_action_dist.csv"), 
+            "milestone_df": _load_csv("training_milestone_log.csv"),
             "inference_df": _load_csv("inference_log.csv"),
             "report":       _load_json("experiment_report.json"),
         })

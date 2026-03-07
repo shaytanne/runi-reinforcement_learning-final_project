@@ -189,17 +189,17 @@ def plot_action_distribution(log_dir: str, window: int = 50) -> None:
       - Left:  smoothed action counts per episode
       - Right: proportional action share over time (normalised by episode steps)
 
-    Reads action_N columns from action_dist_training.csv.
+    Reads action_N columns from training_action_dist.csv.
     Compatible with both SimpleGrid (3 actions) and KeyDoorBall (5 actions).
     """
-    csv_path = os.path.join(log_dir, "action_dist_training.csv")
+    csv_path = os.path.join(log_dir, "training_action_dist.csv")
     if not os.path.exists(csv_path):
         return
     df = pd.read_csv(csv_path)
 
     action_cols = sorted([c for c in df.columns if c.startswith("action_")])
     if not action_cols:
-        print("No action columns found in action_dist_training.csv — add action logging to experiment_runner.py")
+        print("No action columns found in training_action_dist.csv — add action logging to experiment_runner.py")
         return
 
     action_labels = {
@@ -259,7 +259,7 @@ def plot_milestone_progress(log_dir: str, window: int = 50) -> None:
     - ball pickup
     - goal reached
     """
-    csv_path = os.path.join(log_dir, "milestone_log.csv")
+    csv_path = os.path.join(log_dir, "training_milestone_log.csv")
     if not os.path.exists(csv_path):
         return  # skip for SimpleGrid exps
 

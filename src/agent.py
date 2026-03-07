@@ -398,16 +398,16 @@ class PPOAgent(BaseAgent):
 
     Safe submission version:
     - clipped PPO policy objective
-    - one-step TD target
-    - plain MSE value loss (no value clipping)
-    - no advantage normalization
+    - NO GAE
+    - NO value clipping
+    - NO advantage normalization
+    - supports two course-safe return estimators:
+        1) td0           -> r + gamma * V(s') * (1 - done)
+        2) reward_to_go  -> discounted reward-to-go G_t
     - minibatch / multi-epoch PPO updates
     """
 
     def __init__(self, config: Dict, obs_shape: np.ndarray, num_actions: int, device: torch.device):
-        """
-        :param obs_shape:   (H, W, C) — e.g. (84, 84, 1)
-        """
         super().__init__(config=config, obs_shape=obs_shape, num_actions=num_actions, device=device)
 
         self.num_actions = num_actions
@@ -423,6 +423,10 @@ class PPOAgent(BaseAgent):
         self.entropy_coefficient = config.get("entropy_coefficient", 0.01)
         self.max_grad_norm = config.get("max_grad_norm", 0.5)
         self.minibatch_size = int(config.get("minibatch_size", 64))
+
+        # safe PPO return estimator:
+        # "td0" or "reward_to_go"
+        self.return_mode = config.get("return_mode", "td0")
 
         # kept for interface compatibility
         self.epsilon = 0.0
@@ -461,6 +465,23 @@ class PPOAgent(BaseAgent):
             log_prob = dist.log_prob(action)
             return int(action.item()), float(log_prob.item())
 
+    def _compute_reward_to_go_returns(self, rewards: torch.Tensor, dones: torch.Tensor) -> torch.Tensor:
+        """
+        Compute discounted reward-to-go:
+            G_t = r_t + gamma * r_{t+1} + gamma^2 * r_{t+2} + ...
+
+        Since trajectories are stored episode-by-episode for PPO, this naturally resets
+        at episode termination. We keep done handling for safety.
+        """
+        returns = torch.zeros_like(rewards, device=self.device)
+        running_return = torch.tensor(0.0, device=self.device)
+
+        for t in reversed(range(len(rewards))):
+            running_return = rewards[t] + self.gamma * running_return * (1.0 - dones[t])
+            returns[t] = running_return
+
+        return returns
+
     def update(self, trajectories: List[Tuple[np.ndarray, int, float, np.ndarray, bool, float]]) -> Dict:
         """
         PPO update: run multiple minibatch epochs on one collected rollout.
@@ -486,19 +507,27 @@ class PPOAgent(BaseAgent):
         dones = torch.tensor(dones, dtype=torch.float32, device=self.device)
         old_log_probs = torch.tensor(old_log_probs, dtype=torch.float32, device=self.device)
 
-        # compute fixed TD targets / advantages once
+        # compute fixed targets / advantages once
         with torch.no_grad():
             _, old_values = self.network(states)
             old_values = old_values.squeeze()
 
-            _, next_values = self.network(next_states)
-            next_values = next_values.squeeze()
+            if self.return_mode == "reward_to_go":
+                returns = self._compute_reward_to_go_returns(rewards=rewards, dones=dones)
+                advantages = returns - old_values
 
-            # safe PPO: one-step TD target
-            returns = rewards + self.gamma * next_values * (1 - dones)
+            elif self.return_mode == "td0":
+                _, next_values = self.network(next_states)
+                next_values = next_values.squeeze()
 
-            # one-step advantage
-            advantages = returns - old_values
+                # one-step TD target
+                returns = rewards + self.gamma * next_values * (1 - dones)
+
+                # one-step advantage
+                advantages = returns - old_values
+
+            else:
+                raise ValueError(f"Unsupported PPO return_mode: {self.return_mode}")
 
             # diagnostics
             raw_adv_mean = float(advantages.mean().item())
@@ -553,7 +582,7 @@ class PPOAgent(BaseAgent):
 
                 policy_loss = -torch.min(surr1, surr2).mean()
 
-                # safe PPO critic loss: plain MSE
+                # safe PPO critic loss: plain MSE (no value clipping)
                 value_loss = 0.5 * (values - returns[mb]).pow(2).mean()
 
                 entropy = dist.entropy().mean()
@@ -611,9 +640,6 @@ class PPOAgent(BaseAgent):
         return last_epoch_stats
 
     def save(self, path: str) -> None:
-        """
-        Save agent snapshot at checkpoint
-        """
         agent_dict = {
             "network_state_dict": self.network.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
@@ -624,13 +650,13 @@ class PPOAgent(BaseAgent):
         print(f"[PPO] Checkpoint saved to {path}")
 
     def load(self, filepath: str) -> None:
-        """Load network + optimizer state from checkpoint"""
         checkpoint = torch.load(filepath, map_location=self.device, weights_only=True)
         self.network.load_state_dict(checkpoint["network_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.steps_done = checkpoint["steps_done"]
         print(f"[PPO] Checkpoint loaded from {filepath} (step: {self.steps_done})")
 
+        
 class DDQNPERAgent(BaseAgent):
     """
     Double DQN Agent with PER buffer

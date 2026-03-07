@@ -146,10 +146,10 @@ class Experiment:
             
             # log action distribution (debug)
             action_dist = {f"action_{a}": episode_action_counts.get(a, 0) for a in range(self.env.action_space.n)}
-            self.logger.log(filename="action_dist_training", episode=episode, **action_dist)
+            self.logger.log(filename="training_action_dist", episode=episode, **action_dist)
 
             if milestones:
-                self.logger.log(filename="milestone_log", episode=episode, **milestones)
+                self.logger.log(filename="training_milestone_log", episode=episode, **milestones)
         
         # save final model
         self.agent.save(path=os.path.join(self.results_dir, "final_model.pt"))
