@@ -55,7 +55,7 @@ def main():
     device = get_device()
 
     # define exp set:
-    experiments = [EXP7B_PPO_GAE_ONLY_FAILED_INTERACTION]
+    experiments = [EXP7C_PPO_GAE_RGB]
     for exp in experiments:
         run_single_experiment(
             config=exp["config"], 

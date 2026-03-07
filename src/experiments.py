@@ -518,7 +518,7 @@ EXP7A_PPO_GAE_FINE_TUNE["config"].update({
     "learning_rate": 5e-5,
     "update_epochs": 2,
     "entropy_coefficient": 5e-4,
-    
+
     "gae_lambda": 0.95,
     "clip_eps": 0.2,
     "minibatch_size": 64,
@@ -541,6 +541,14 @@ EXP7B_PPO_GAE_ONLY_FAILED_INTERACTION["config"].update({
         "failed_pickup_penalty": 0.003,
         "failed_toggle_penalty": 0.003,
     },
+})
+
+EXP7C_PPO_GAE_RGB = {
+    "name": "EXP7C_PPO_GAE_RGB",
+    "config": copy.deepcopy(EXP7A_PPO_GAE_ONLY["config"]),
+}
+EXP7C_PPO_GAE_RGB["config"].update({
+    "obs_shape": (84, 84, 3),
 })
 
 # =====================================================================
