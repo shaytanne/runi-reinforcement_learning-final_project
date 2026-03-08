@@ -123,6 +123,17 @@ class MetricsHandler:
 # UTILS FOR RECORDING RESULTS (PLOTTING, REPORTS)
 # ##########
 
+def load_csv(path: str) -> pd.DataFrame:
+    df = pd.read_csv(path)
+    if "episode" not in df.columns:
+        raise ValueError(f"'episode' column not found in {path}")
+    return df
+
+
+def rolling_mean(data: np.ndarray, window: int = 50) -> np.ndarray:
+    return data.rolling(window=window, min_periods=1).mean()
+
+
 def save_fig(fig: plt.Figure, save_dir: str, filename: str) -> None:
     """Saves matplotlib figure to save_dir/filename, creates dir if needed"""
     os.makedirs(save_dir, exist_ok=True)
@@ -317,39 +328,106 @@ def plot_milestone_progress(log_dir: str, window: int = 50) -> None:
     print(f"Milestone plot saved to: {save_path}")
 
 
-def plot_comparison(run_directories: Dict, window: int = 50, save_dir: str = "results") -> None:
+def plot_training_comparison(runs: Dict, metric: str = "success", window : int = 50, 
+                             title: str = None, ylabel: str = None,
+                          save_path=None):
     """
-    Plots multiple runs to compare algorithms    
-    :param run_directories: dict like {'DQN': 'results/DQN_.../', 'DoubleDQN': 'results/Double_.../'}
+    Overlay training curves from multiple training logs
+
+    runs: dict, maps exp name to csv path
+    metric: one of 'success', 'reward', 'steps'
     """
+    plt.figure(figsize=(8, 5))
 
-    plt.figure(figsize=(12, 6))
-    
-    for label, log_dir in run_directories.items():
-        csv_path = os.path.join(log_dir, "training_log.csv")
-        if not os.path.exists(csv_path):
-            continue
-            
-        df = pd.read_csv(csv_path)
-        if len(df) > window:
-            # plot only smoothed curve for clarity
-            rolling_avg = df['reward'].rolling(window=window).mean()
-            plt.plot(df['episode'], rolling_avg, linewidth=2, label=label)
-        else:
-            plt.plot(df['episode'], df['reward'], linewidth=2, label=label)
+    for label, path in runs.items():
+        df = load_csv(path)
+        if metric not in df.columns:
+            raise ValueError(f"'{metric}' not found in {path}")
+        y = rolling_mean(df[metric], window=window)
+        plt.plot(df["episode"], y, label=label)
 
-    plt.xlabel('Episode')
-    plt.ylabel('Average Reward')
-    plt.title(f'Algorithm Comparison (Smoothed over {window} eps)')
+    plt.xlabel("Episode")
+    plt.ylabel(ylabel or f"Rolling mean {metric}")
+    plt.title(title or f"Training {metric} (window={window})")
     plt.legend()
-    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=200, bbox_inches="tight")
+    plt.show()
+
+
+def summarize_inference(path: str, last_n: int = None) -> Dict:
+    """
+    Returns summary stats from an inference log:
+    - mean success
+    - mean steps
+    - mean reward
+    """
+    df = load_csv(path)
+
+    if last_n is not None:
+        df = df.tail(last_n)
+
+    return {
+        "success": df["success"].mean(),
+        "steps": df["steps"].mean(),
+        "reward": df["reward"].mean(),
+        "n_episodes": len(df),
+    }
+
+
+def plot_inference_bar(runs: Dict, metric: str = "success", title: str = None, ylabel: str =None, 
+                       last_n: int = None, save_path:str = None) -> None:
+    """
+    Bar chart comparing one inference metric across multiple inference logs
+    runs: dict, maps exp name to csv path    
+    """
+    labels = []
+    values = []
+
+    for label, path in runs.items():
+        stats = summarize_inference(path, last_n=last_n)
+        labels.append(label)
+        values.append(stats[metric])
+
+    plt.figure(figsize=(8, 5))
+    plt.bar(labels, values)
+    plt.ylabel(ylabel or metric)
+    plt.title(title or f"Inference {metric}")
+    plt.xticks(rotation=20)
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=200, bbox_inches="tight")
+    plt.show()
+
+
+def plot_grouped_2_metrics(runs: Dict, metric_a: str = "success", metric_b: str = "steps",
+                          title: str = None, ylabel_a:str = None, ylabel_b: str = None,
+                          last_n: int = None, save_dir: str = None) -> None:
+    """
+    Makes TWO separate charts (one per metric), because that is cleaner for the report.
+    """
+    plot_inference_bar(
+        runs,
+        metric=metric_a,
+        title=title or f"Inference {metric_a}",
+        ylabel=ylabel_a or metric_a,
+        last_n=last_n,
+        save_path=f"{save_dir}_{metric_a}.png" if save_dir else None,
+    )
+
+    plot_inference_bar(
+        runs,
+        metric=metric_b,
+        title=title or f"Inference {metric_b}",
+        ylabel=ylabel_b or metric_b,
+        last_n=last_n,
+        save_path=f"{save_dir}_{metric_b}.png" if save_dir else None,
+    )
+
     
-    save_path = os.path.join(save_dir, "comparison_plot.png")
-    plt.savefig(save_path)
-    plt.close()
-    print(f"Comparison plot saved to: {save_path}")
-
-
 def analyze_inference(log_dir: str, mode: str = "greedy") -> None:
     """
     Reads inference_log.csv, calculates stats, generates report & plots
